@@ -461,7 +461,8 @@ async function transferIssues() {
   //
 
   // if a GitLab issue does not exist in GitHub repo, create it -- along with comments.
-  for (let issue of issues) {
+  const reverseIssues = issues.reverse()
+  for (let issue of reverseIssues) {
     // try to find a GitHub issue that already exists for this GitLab issue
     let githubIssue = githubIssues.find(
       i => i.title.trim() === issue.title.trim()
