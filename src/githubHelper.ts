@@ -80,7 +80,8 @@ export class GithubHelper {
     githubApi: GitHubApi,
     githubSettings: GithubSettings,
     gitlabHelper: GitlabHelper,
-    useIssuesForAllMergeRequests: boolean
+    useIssuesForAllMergeRequests: boolean,
+    delayInMs: number
   ) {
     this.githubApi = githubApi;
     this.githubUrl = githubSettings.baseUrl
@@ -93,7 +94,7 @@ export class GithubHelper {
     this.githubRepo = githubSettings.repo;
     this.githubTimeout = githubSettings.timeout;
     this.gitlabHelper = gitlabHelper;
-    this.delayInMs = 2000;
+    this.delayInMs = delayInMs;
     this.useIssuesForAllMergeRequests = useIssuesForAllMergeRequests;
     this.users = new Set<string>();
   }

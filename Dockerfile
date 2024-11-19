@@ -30,7 +30,7 @@ COPY --chown=$USERNAME . /app
 USER $USERNAME
 
 # Install dependencies
-RUN npm i
+RUN npm ci
 
 # Start the process
 ENTRYPOINT ["/bin/bash", "-c", "npm run start"]

@@ -85,13 +85,17 @@ const githubApi = new MyOctokit({
     minimumAbuseRetryAfter: 1000,
   },
 });
+const defaultDelayInMS = 2000;
+const delayInMS = parseInt(process.env.GL2GH_DELAY_MS) || defaultDelayInMS;
+console.log(`Using a delay of ${delayInMS}ms for requests to Github`);
 
 const gitlabHelper = new GitlabHelper(gitlabApi, settings.gitlab);
 const githubHelper = new GithubHelper(
   githubApi,
   settings.github,
   gitlabHelper,
-  settings.useIssuesForAllMergeRequests
+  settings.useIssuesForAllMergeRequests,
+  delayInMS
 );
 
 // If no project id is given in settings.js, just return
