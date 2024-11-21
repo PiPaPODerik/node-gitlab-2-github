@@ -5,6 +5,13 @@ import * as crypto from 'crypto';
 import S3 from 'aws-sdk/clients/s3';
 import { GitlabHelper } from './gitlabHelper';
 
+import { info, error, debug } from 'loglevel';
+const console = {
+  log: info,
+  error,
+  debug,
+}
+
 export const sleep = (milliseconds: number) => {
   return new Promise(resolve => setTimeout(resolve, milliseconds));
 };

@@ -16,6 +16,25 @@ import * as fs from 'fs';
 
 import AWS from 'aws-sdk';
 
+import { 
+  levels as logLevels,
+  setLevel as setLogLevel, 
+  info,
+  error,
+  debug,
+  warn
+} from 'loglevel';
+
+const console = {
+  log: info,
+  error,
+  debug,
+  warn
+};
+
+const loglevel = logLevels[process.env?.LOGLEVEL?.toUpperCase()] || logLevels.DEBUG;
+setLogLevel(loglevel);
+
 const CCERROR = '\x1b[31m%s\x1b[0m'; // red
 const CCWARN = '\x1b[33m%s\x1b[0m'; // yellow
 const CCINFO = '\x1b[36m%s\x1b[0m'; // cyan

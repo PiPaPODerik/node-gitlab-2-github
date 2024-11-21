@@ -11,6 +11,14 @@ import {
   GitLabUser,
 } from './gitlabHelper';
 
+import { info, error, debug, warn } from 'loglevel';
+const console = {
+  log: info,
+  error,
+  debug,
+  warn
+}
+
 type IssuesListForRepoResponseData =
   Endpoints['GET /repos/{owner}/{repo}/issues']['response']['data'];
 type PullsListResponseData =
@@ -473,7 +481,7 @@ export class GithubHelper {
     let comments: CommentImport[] = [];
 
     if (issue.isPlaceholder) {
-      console.log(
+      console.debug(
         '\t...this is a placeholder issue, no comments are migrated.'
       );
     } else {
@@ -511,7 +519,7 @@ export class GithubHelper {
     notes: GitLabNote[]
   ): Promise<CommentImport[]> {
     if (!notes || !notes.length) {
-      console.log(`\t...no comments available, nothing to migrate.`);
+      console.debug(`\t...no comments available, nothing to migrate.`);
       return [];
     }
 
@@ -584,10 +592,10 @@ export class GithubHelper {
       }
     }
     if (result.data.status === 'failed') {
-      console.log('\tFAILED: ');
-      console.log(result);
-      console.log('\tERRORS:');
-      console.log(result.data.errors);
+      console.error('\tFAILED: ');
+      console.error(result);
+      console.error('\tERRORS:');
+      console.error(result.data.errors);
       return null;
     }
 
@@ -605,7 +613,7 @@ export class GithubHelper {
 
     // retrieve any notes/comments associated with this issue
     if (issue.isPlaceholder) {
-      console.log(
+      console.debug(
         '\t...this is a placeholder issue, no comments are migrated.'
       );
       return;
@@ -615,7 +623,7 @@ export class GithubHelper {
 
     // if there are no notes, then there is nothing to do!
     if (notes.length === 0) {
-      console.log(`\t...no issue comments available, nothing to migrate.`);
+      console.debug(`\t...no issue comments available, nothing to migrate.`);
       return;
     }
 
@@ -947,7 +955,7 @@ export class GithubHelper {
       let comments: CommentImport[] = [];
 
       if (!mergeRequest.iid) {
-        console.log(
+        console.debug(
           '\t...this is a placeholder for a deleted GitLab merge request, no comments are created.'
         );
       } else {
@@ -989,7 +997,7 @@ export class GithubHelper {
     console.log('\tMigrating pull request comments...');
 
     if (!mergeRequest.iid) {
-      console.log(
+      console.debug(
         '\t...this is a placeholder for a deleted GitLab merge request, no comments are created.'
       );
       return Promise.resolve();
@@ -1001,7 +1009,7 @@ export class GithubHelper {
 
     // if there are no notes, then there is nothing to do!
     if (notes.length === 0) {
-      console.log(
+      console.debug(
         `\t...no pull request comments available, nothing to migrate.`
       );
       return;
@@ -1414,11 +1422,11 @@ export class GithubHelper {
     };
 
     try {
-      console.log(`Deleting repo ${params.owner}/${params.repo}...`);
+      console.warn(`Deleting repo ${params.owner}/${params.repo}...`);
       await this.githubApi.repos.delete(params);
-      console.log('\t...done.');
+      console.debug('\t...done.');
     } catch (err) {
-      if (err.status == 404) console.log(' not found.');
+      if (err.status == 404) console.debug(' not found.');
       else console.error(`\n\tSomething went wrong: ${err}.`);
     }
     try {
@@ -1436,7 +1444,7 @@ export class GithubHelper {
           private: true,
         });
       }
-      console.log('\t...done.');
+      console.debug('\t...done.');
     } catch (err) {
       console.error(`\n\tSomething went wrong: ${err}.`);
     }

@@ -8,6 +8,13 @@ import {
 } from '@gitbeaker/core/dist/types/types';
 import { GitlabSettings } from './settings';
 import axios from 'axios';
+import { info, error, debug } from 'loglevel';
+
+const console = {
+  log: info,
+  error,
+  debug,
+}
 
 export type GitLabIssue = IssueSchema;
 export type GitLabNote = NoteSchema;
