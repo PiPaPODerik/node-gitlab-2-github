@@ -29,10 +29,10 @@ const console = {
   log: info,
   error,
   debug,
-  warn
+  warn,
 };
 
-const loglevel = logLevels[process.env?.LOGLEVEL?.toUpperCase()] || logLevels.DEBUG;
+const loglevel = logLevels[process.env?.LOGLEVEL?.toUpperCase()] || logLevels.INFO;
 setLogLevel(loglevel);
 
 const CCERROR = '\x1b[31m%s\x1b[0m'; // red

@@ -593,10 +593,16 @@ export class GithubHelper {
       }
     }
     if (result.data.status === 'failed') {
-      console.error('\tFAILED: ');
-      console.error(result);
+      console.debug('\tFAILED: ');
+      console.debug(result);
+      const errorObject = {
+        url: result.data.url,
+        statusCode: result.data.status,
+        data: result.data,
+        errors: result.data.errors,
+      }
       console.error('\tERRORS:');
-      console.error(result.data.errors);
+      console.error(errorObject);
       return null;
     }
 
