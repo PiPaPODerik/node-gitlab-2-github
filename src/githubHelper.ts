@@ -370,6 +370,7 @@ export class GithubHelper {
 
     if (settings.dryRun) return Promise.resolve({ data: issue });
 
+    info(`Creating issue #${issue.iid}...`);
     return this.githubApi.issues.create(props);
   }
 
@@ -695,6 +696,7 @@ export class GithubHelper {
 
     if (settings.dryRun) return true;
 
+    info(`Creating comment for GitHub issue #${githubIssue.number}...`);
     await this.githubApi.issues
       .createComment({
         owner: this.githubOwner,
@@ -765,6 +767,7 @@ export class GithubHelper {
 
     if (settings.dryRun) return Promise.resolve({ number: -1, title: 'DEBUG' });
 
+    info(`Creating milestone ${milestone.title}...`);
     const created = await this.githubApi.issues.createMilestone(
       githubMilestone
     );
@@ -791,6 +794,7 @@ export class GithubHelper {
 
     if (settings.dryRun) return Promise.resolve();
     // create the GitHub label
+    info(`Creating label ${label.name}...`);
     return await this.githubApi.issues.createLabel(githubLabel);
   }
 
@@ -909,6 +913,7 @@ export class GithubHelper {
 
       try {
         // try to create the GitHub pull request from the GitLab issue
+        info(`Creating pull request #${mergeRequest.iid}...`);
         const response = await this.githubApi.pulls.create(props);
         return Promise.resolve(response);
       } catch (err) {
@@ -994,7 +999,7 @@ export class GithubHelper {
     pullRequest: Pick<GitHubPullRequest, 'number'>,
     mergeRequest: GitLabMergeRequest
   ): Promise<void> {
-    console.log('\tMigrating pull request comments...');
+    console.log(`\tMigrating pull request comments of (pull request #${pullRequest.number})...`);
 
     if (!mergeRequest.iid) {
       console.debug(
