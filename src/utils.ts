@@ -89,10 +89,7 @@ export const migrateAttachments = async (
       ] = `${prefix}[${name}](${s3url})`;
     } else {
       // Not using S3: default to old URL, adding absolute path
-      const host = gitlabHelper.host.endsWith('/')
-        ? gitlabHelper.host
-        : gitlabHelper.host + '/';
-      const attachmentUrl = host + gitlabHelper.projectPath + url;
+      const attachmentUrl = await gitlabHelper.getAttachment(url);
       offsetToAttachment[
         match.index as number
       ] = `${prefix}[${name}](${attachmentUrl})`;

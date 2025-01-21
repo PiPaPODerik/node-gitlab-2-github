@@ -144,7 +144,10 @@ export class GitlabHelper {
     const relUrlParts = relUrl.split('/');
     const fileName = relUrlParts[relUrlParts.length - 1];
     const secret = relUrlParts[relUrlParts.length - 2];
-    return `${this.host}/api/v4/projects/${this.gitlabProjectId}/uploads/${secret}/${fileName}`
+    const host = this.host.endsWith('/')
+        ? this.host
+        : this.host + '/';
+    return `${host}api/v4/projects/${this.gitlabProjectId}/uploads/${secret}/${fileName}`
   }
 
   /**
