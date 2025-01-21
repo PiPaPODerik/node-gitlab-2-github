@@ -122,15 +122,14 @@ export class GitlabHelper {
    * Gets attachment using http get
    */
   async getAttachment(relurl: string) {
+    const attachmentUrl = this.transformAttachmentUrl(relurl);
+
     try {
-      const attachmentUrl = this.host + '/' + this.projectPath + relurl;
       const data = (
         await axios.get(attachmentUrl, {
           responseType: 'arraybuffer',
           headers: {
-            // HACK: work around GitLab's API lack of GET for attachments
-            // See https://gitlab.com/gitlab-org/gitlab/-/issues/24155
-            Cookie: `_gitlab_session=${this.sessionCookie}`,
+            'PRIVATE-TOKEN': this.gitlabToken,
           },
         })
       ).data;
@@ -139,6 +138,13 @@ export class GitlabHelper {
       console.error(`Could not download attachment #${relurl}.`);
       return null;
     }
+  }
+
+  transformAttachmentUrl(relUrl: string) {
+    const relUrlParts = relUrl.split('/');
+    const fileName = relUrlParts[relUrlParts.length - 1];
+    const secret = relUrlParts[relUrlParts.length - 2];
+    return `${this.host}/api/v4/projects/${this.gitlabProjectId}/uploads/${secret}/${fileName}`
   }
 
   /**
