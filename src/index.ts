@@ -214,6 +214,8 @@ async function migrate() {
   //
 
   try {
+    // Delete output directory if present
+    await deleteOutputDirectory();
     await githubHelper.registerRepoId();
     await gitlabHelper.registerProjectPath(settings.gitlab.projectId);
 
@@ -258,6 +260,14 @@ async function migrate() {
   }
 
   console.log('\n\nTransfer complete!\n\n');
+
+  async function deleteOutputDirectory() {
+    const outputDir = 'output';
+    if (fs.existsSync(outputDir)) {
+      await fs.promises.rm(outputDir, { recursive: true, force: true });
+      console.log(`Deleted ${outputDir} directory.`);
+    }
+  }
 }
 
 // ----------------------------------------------------------------------------

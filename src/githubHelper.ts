@@ -1327,7 +1327,9 @@ export class GithubHelper {
       str,
       this.repoId,
       settings.s3,
-      this.gitlabHelper
+      this.gitlabHelper,
+      this.githubOwner,
+      this.githubRepo,
     );
 
     return str;

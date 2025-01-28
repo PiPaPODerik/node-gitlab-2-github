@@ -1,11 +1,14 @@
-import { S3Settings } from './settings';
+import { S3Settings, GithubSettings } from './settings';
 import * as mime from 'mime-types';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import S3 from 'aws-sdk/clients/s3';
 import { GitlabHelper } from './gitlabHelper';
+import { runTimeStamp } from './runTimeStamp';
 
 import { info, error, debug } from 'loglevel';
+import * as fs from 'fs';
+
 const console = {
   log: info,
   error,
@@ -15,13 +18,22 @@ const console = {
 export const sleep = (milliseconds: number) => {
   return new Promise(resolve => setTimeout(resolve, milliseconds));
 };
+interface Attachment {
+  attachmentUrl: string;
+  targetPath: string;
+  binaryData: Buffer;
+};
+
+type AttachmentsByRepository = Record<string, { repoUrl: string, uniqueGitTag: string, attachments: Array<Attachment> }>;
 
 // Creates new attachments and replaces old links
 export const migrateAttachments = async (
   body: string,
   githubRepoId: number | undefined,
   s3: S3Settings | undefined,
-  gitlabHelper: GitlabHelper
+  gitlabHelper: GitlabHelper,
+  githubOwner: GithubSettings['owner'],
+  githubRepo: GithubSettings['repo']
 ) => {
   const regexp = /(!?)\[([^\]]+)\]\((\/uploads[^)]+)\)/g;
 
@@ -37,11 +49,12 @@ export const migrateAttachments = async (
     const prefix = match[1] || '';
     const name = match[2];
     const url = match[3];
+    const basename = path.basename(url);
+    const attachmentBuffer = await gitlabHelper.getAttachment(url);
+    const attachments: AttachmentsByRepository = {};
 
     if (s3 && s3.bucket) {
-      const basename = path.basename(url);
       const mimeType = mime.lookup(basename);
-      const attachmentBuffer = await gitlabHelper.getAttachment(url);
       if (!attachmentBuffer) {
         continue;
       }
@@ -89,18 +102,77 @@ export const migrateAttachments = async (
       ] = `${prefix}[${name}](${s3url})`;
     } else {
       // Not using S3: default to old URL, adding absolute path
-      const host = gitlabHelper.host.endsWith('/')
-        ? gitlabHelper.host
-        : gitlabHelper.host + '/';
-      const attachmentUrl = host + gitlabHelper.projectPath + url;
+      if (!attachmentBuffer) {
+        console.error(`Failed to get attachment for URL: ${url}`);
+        continue;
+      }
+      
+      const targetBasePath = '.github-migration/attachments';
+      const { repoId, repoUrl, uniqueGitTag, attachmentUrl, targetPath} = createattachmentInfo(targetBasePath, basename, attachmentBuffer);
+      updateattachments({ repoId, repoUrl, uniqueGitTag, attachment: { attachmentUrl, targetPath, binaryData: attachmentBuffer }, attachments });
+
       offsetToAttachment[
         match.index as number
       ] = `${prefix}[${name}](${attachmentUrl})`;
     }
+
+    await updateAttachmentOutput(attachments);
   }
 
   return body.replace(
     regexp,
-    ({}, {}, {}, {}, offset, {}) => offsetToAttachment[offset]
+    ({ }, { }, { }, { }, offset, { }) => offsetToAttachment[offset]
   );
+
+  function updateattachments({ repoId, repoUrl, uniqueGitTag, attachment, attachments }: { repoId: string, repoUrl: string, uniqueGitTag: string, attachment: Attachment, attachments: AttachmentsByRepository }) {
+    if (!attachments[repoId]) {
+      const attachmentInfo = { repoUrl, uniqueGitTag, attachments: [attachment] };
+      attachments[repoId] = attachmentInfo
+    } else {
+      attachments[repoId].attachments.push(attachment);
+    }
+  }
+
+  function createattachmentInfo(targetBasePath: string, basename: string, attachmentBuffer: Buffer) {
+    const uniqueGitTag = `attachments-from-gitlab-${runTimeStamp.replace(/[^a-zA-Z0-9-]/g, '-')}`;
+    const repoUrl = `https://github.com/${githubOwner}/${githubRepo}.git`.replace(/\.git\/?$/, '.git');
+    const repoId = generateHash(repoUrl);
+    const targetPath = `${targetBasePath}/${repoId}/${basename}`;
+    const attachmentUrl = `https://github.com/${githubOwner}/${githubRepo}/blob/${uniqueGitTag}/${targetPath}?raw=true`;
+
+    return { repoId, repoUrl, uniqueGitTag, attachmentUrl, targetPath };
+  }
+
+  function generateHash(stringToHash: string) {
+    const hash = crypto.createHash('md5');
+    hash.update(stringToHash);
+    const uniqueHash = hash.digest('hex');
+    return uniqueHash;
+  }
 };
+async function updateAttachmentOutput(attachmentsByRepo: AttachmentsByRepository) {
+  const attachmentsFolderPath = path.resolve(__dirname, '../output/attachments/');
+  const attachmentsFilePath = path.resolve(attachmentsFolderPath, 'new-attachments.json');
+
+  if (!fs.existsSync(attachmentsFolderPath)) {
+    await fs.promises.mkdir(attachmentsFolderPath, { recursive: true });
+  }
+
+  let existingAttachments: AttachmentsByRepository = {};
+  if (fs.existsSync(attachmentsFilePath)) {
+    const fileContent = await fs.promises.readFile(attachmentsFilePath, 'utf-8');
+    existingAttachments = JSON.parse(fileContent);
+  }
+
+  for (const [repoId, attachmentsInfo] of Object.entries(attachmentsByRepo)) {
+    const existingAttachment = existingAttachments[repoId];
+    if (existingAttachment) {
+      existingAttachment.attachments.push(...attachmentsInfo.attachments);
+    } else {
+      existingAttachments[repoId] = attachmentsInfo;
+    }
+  }
+
+  await fs.promises.writeFile(attachmentsFilePath, JSON.stringify(existingAttachments, null, 2));
+}
+

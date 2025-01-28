@@ -138,3 +138,9 @@ modules.xml
 
 # Ignore whole .idea folder:
 .idea/
+
+# app output
+/output
+
+# macOS specific files
+.DS_Store
