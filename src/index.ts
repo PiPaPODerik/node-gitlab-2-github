@@ -104,7 +104,7 @@ const githubApi = new MyOctokit({
     minimumAbuseRetryAfter: 1000,
   },
 });
-const defaultDelayInMS = 2000;
+const defaultDelayInMS = 1000;
 const delayInMS = parseInt(process.env.GL2GH_DELAY_MS) || defaultDelayInMS;
 console.log(`Using a delay of ${delayInMS}ms for requests to Github`);
 
