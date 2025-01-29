@@ -104,7 +104,7 @@ const githubApi = new MyOctokit({
     minimumAbuseRetryAfter: 1000,
   },
 });
-const defaultDelayInMS = 1000;
+const defaultDelayInMS = 2000;
 const delayInMS = parseInt(process.env.GL2GH_DELAY_MS) || defaultDelayInMS;
 console.log(`Using a delay of ${delayInMS}ms for requests to Github`);
 
@@ -237,13 +237,9 @@ async function migrate() {
       await transferReleases();
     }
 
-    if (!await githubHelper.hasIssues()) {
-      // Important: do this before transferring the merge requests
-      if (settings.transfer.issues) {
-        await transferIssues();
-      }
-    } else {
-      console.warn('There are existing issues in the GitHub repository. Skipping issue migration to maintain issue IDs in sequence.');
+    // Important: do this before transferring the merge requests
+    if (settings.transfer.issues) {
+      await transferIssues();
     }
 
     if (settings.transfer.mergeRequests) {
@@ -253,7 +249,6 @@ async function migrate() {
         await transferMergeRequests();
       }
     }
-    
 
     if (settings.exportUsers) {
       const users = Array.from(githubHelper.users.values()).join("\n");
