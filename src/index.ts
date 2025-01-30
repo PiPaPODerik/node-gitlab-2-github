@@ -41,6 +41,7 @@ const CCERROR = '\x1b[31m%s\x1b[0m'; // red
 const CCWARN = '\x1b[33m%s\x1b[0m'; // yellow
 const CCINFO = '\x1b[36m%s\x1b[0m'; // cyan
 const CCSUCCESS = '\x1b[32m%s\x1b[0m'; // green
+const logDryRunEnforced = () => console.warn('\x1b[1m\x1b[4m\x1b[33m%s\x1b[0m', 'Dry-Run enforced migration NOT performed! There are existing issues in the GitHub repository. Recreate the repository to transfer Issues, Milestones, Labels, and Merge Requests again.');
 
 const counters = {
   nrOfPlaceholderIssues: 0,
@@ -264,6 +265,8 @@ async function migrate() {
   }
 
   console.log('\n\nTransfer complete!\n\n');
+
+  logDryRunEnforced();
 
   async function recreateOutputDirectory() {
 
@@ -769,10 +772,11 @@ function inform(msg: string) {
 function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
 }
+
 async function enforceDryRunIfNecessary(settings: Settings) {
   if (await githubHelper.hasIssues()) {
     settings.dryRun = true;
-    console.warn(CCWARN, 'Dry-Run enforced because there are existing issues in the GitHub repository. Recreate the repository to transfer Issues, Milestones, Labels, and Merge Requests again.');
+    logDryRunEnforced();
   }
 }
 

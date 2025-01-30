@@ -586,7 +586,7 @@ export class GithubHelper {
     }
 
     console.log(
-      `\t...Done creating comments (migrated ${nrOfMigratedNotes} comments, skipped ${notes.length - nrOfMigratedNotes
+      `...Done creating comments (migrated ${nrOfMigratedNotes} comments, skipped ${notes.length - nrOfMigratedNotes
       } comments)`
     );
     return comments;
@@ -831,7 +831,6 @@ export class GithubHelper {
 
     if (settings.dryRun) return Promise.resolve();
     // create the GitHub label
-    info(`Creating label ${label.name}...`);
     return await this.githubApi.issues.createLabel(githubLabel);
   }
 
@@ -1067,7 +1066,7 @@ export class GithubHelper {
     }
 
     console.log(
-      `\t...Done creating pull request comments (migrated ${nrOfMigratedNotes} pull request comments, skipped ${notes.length - nrOfMigratedNotes
+      `...Done creating pull request comments (migrated ${nrOfMigratedNotes} pull request comments, skipped ${notes.length - nrOfMigratedNotes
       } pull request comments)`
     );
   }
