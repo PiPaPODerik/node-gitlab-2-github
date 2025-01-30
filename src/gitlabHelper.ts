@@ -8,10 +8,10 @@ import {
 } from '@gitbeaker/core/dist/types/types';
 import { GitlabSettings } from './settings';
 import axios from 'axios';
-import { info, error, debug } from 'loglevel';
+import { warn, error, debug } from 'loglevel';
 
 const console = {
-  log: info,
+  log: warn,
   error,
   debug,
 }

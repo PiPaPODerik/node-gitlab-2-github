@@ -6,11 +6,11 @@ import S3 from 'aws-sdk/clients/s3';
 import { GitlabHelper } from './gitlabHelper';
 import { runTimeStamp } from './runTimeStamp';
 
-import { info, error, debug } from 'loglevel';
+import { warn, error, debug } from 'loglevel';
 import * as fs from 'fs';
 
 const console = {
-  log: info,
+  log: warn,
   error,
   debug,
 }

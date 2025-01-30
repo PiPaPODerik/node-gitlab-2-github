@@ -19,14 +19,13 @@ import AWS from 'aws-sdk';
 import { 
   levels as logLevels,
   setLevel as setLogLevel, 
-  info,
   error,
   debug,
   warn
 } from 'loglevel';
 
 const console = {
-  log: info,
+  log: warn,
   error,
   debug,
   warn,
@@ -504,9 +503,9 @@ async function transferIssues() {
       try {
         // process asynchronous code in sequence -- treats the code sort of like blocking
         await githubHelper.createIssueAndComments(issue);
-        console.log(`\t...DONE migrating issue #${issue.iid}.`);
+        console.log(`...DONE migrating issue #${issue.iid}.`);
       } catch (err) {
-        console.log(`\t...ERROR while migrating issue #${issue.iid}.`);
+        console.log(`...ERROR while migrating issue #${issue.iid}.`);
 
         console.error('DEBUG:\n', err); // TODO delete this after issue-migration-fails have been fixed
 
@@ -541,15 +540,15 @@ async function transferIssues() {
 
   // print statistics about issue migration:
   console.log(`DONE creating issues.`);
-  console.log(`\n\tStatistics:`);
-  console.log(`\tTotal nr. of issues: ${issues.length}`);
+  console.log(`\nStatistics:`);
+  console.log(`Total nr. of issues: ${issues.length}`);
   console.log(
-    `\tNr. of used placeholder issues: ${counters.nrOfPlaceholderIssues}`
+    `Nr. of used placeholder issues: ${counters.nrOfPlaceholderIssues}`
   );
   console.log(
-    `\tNr. of used replacement issues: ${counters.nrOfReplacementIssues}`
+    `Nr. of used replacement issues: ${counters.nrOfReplacementIssues}`
   );
-  console.log(`\tNr. of issue migration fails: ${counters.nrOfFailedIssues}`);
+  console.log(`Nr. of issue migration fails: ${counters.nrOfFailedIssues}`);
 }
 // ----------------------------------------------------------------------------
 

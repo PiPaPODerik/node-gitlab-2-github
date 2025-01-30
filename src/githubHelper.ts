@@ -12,8 +12,10 @@ import {
 } from './gitlabHelper';
 
 import { info, error, debug, warn } from 'loglevel';
+
 const console = {
-  log: info,
+  log: warn,
+  info,
   error,
   debug,
   warn
@@ -553,8 +555,7 @@ export class GithubHelper {
     }
 
     console.log(
-      `\t...Done creating comments (migrated ${nrOfMigratedNotes} comments, skipped ${
-        notes.length - nrOfMigratedNotes
+      `\t...Done creating comments (migrated ${nrOfMigratedNotes} comments, skipped ${notes.length - nrOfMigratedNotes
       } comments)`
     );
     return comments;
@@ -644,8 +645,7 @@ export class GithubHelper {
     }
 
     console.log(
-      `\t...Done creating issue comments (migrated ${nrOfMigratedNotes} comments, skipped ${
-        notes.length - nrOfMigratedNotes
+      `\t...Done creating issue comments (migrated ${nrOfMigratedNotes} comments, skipped ${notes.length - nrOfMigratedNotes
       } comments)`
     );
   }
@@ -1036,8 +1036,7 @@ export class GithubHelper {
     }
 
     console.log(
-      `\t...Done creating pull request comments (migrated ${nrOfMigratedNotes} pull request comments, skipped ${
-        notes.length - nrOfMigratedNotes
+      `\t...Done creating pull request comments (migrated ${nrOfMigratedNotes} pull request comments, skipped ${notes.length - nrOfMigratedNotes
       } pull request comments)`
     );
   }
