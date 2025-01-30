@@ -23,6 +23,9 @@ import {
   debug,
   warn
 } from 'loglevel';
+import { AttachmentsByRepository } from './utils';
+import { ATTACHMENTS_FILE_PATH, OUTPUT_DIR } from './constants';
+import Settings from './settings';
 
 const console = {
   log: warn,
@@ -118,7 +121,7 @@ const githubHelper = new GithubHelper(
 
 // If no project id is given in settings.js, just return
 // all of the projects that this user is associated with.
-if (!settings.gitlab.projectId) {
+if (settings.gitlab.projectId === undefined && settings.gitlab.projectId === null) {
   gitlabHelper.listProjects();
 } else {
   // user has chosen a project
@@ -214,7 +217,8 @@ async function migrate() {
 
   try {
     // Delete output directory if present
-    await deleteOutputDirectory();
+    await recreateOutputDirectory();
+    await enforceDryRunIfNecessary(settings);
     await githubHelper.registerRepoId();
     await gitlabHelper.registerProjectPath(settings.gitlab.projectId);
 
@@ -228,7 +232,7 @@ async function migrate() {
       );
     }
 
-    if (settings.transfer.labels) {
+    if (settings.transfer.labels) {   
       await transferLabels(true, settings.conversion.useLowerCaseLabels);
     }
 
@@ -256,16 +260,20 @@ async function migrate() {
   } catch (err) {
     console.error('Error during transfer:');
     console.error(err);
+    process.exit(1);
   }
 
   console.log('\n\nTransfer complete!\n\n');
 
-  async function deleteOutputDirectory() {
-    const outputDir = 'output';
-    if (fs.existsSync(outputDir)) {
-      await fs.promises.rm(outputDir, { recursive: true, force: true });
-      console.log(`Deleted ${outputDir} directory.`);
+  async function recreateOutputDirectory() {
+
+    if (fs.existsSync(OUTPUT_DIR)) {
+      await fs.promises.rm(OUTPUT_DIR, { recursive: true, force: true });
+      console.log(`Deleted ${OUTPUT_DIR} directory.`);
     }
+    await fs.promises.mkdir(OUTPUT_DIR);
+    console.debug(`Created ${OUTPUT_DIR} directory.`);
+    await fs.promises.writeFile(ATTACHMENTS_FILE_PATH, JSON.stringify({} as AttachmentsByRepository, null, 2));
   }
 }
 
@@ -761,3 +769,10 @@ function inform(msg: string) {
 function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
 }
+async function enforceDryRunIfNecessary(settings: Settings) {
+  if (await githubHelper.hasIssues()) {
+    settings.dryRun = true;
+    console.warn(CCWARN, 'Dry-Run enforced because there are existing issues in the GitHub repository. Recreate the repository to transfer Issues, Milestones, Labels, and Merge Requests again.');
+  }
+}
+

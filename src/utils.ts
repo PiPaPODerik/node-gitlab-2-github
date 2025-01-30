@@ -8,6 +8,7 @@ import { runTimeStamp } from './runTimeStamp';
 
 import { warn, error, debug } from 'loglevel';
 import * as fs from 'fs';
+import { ATTACHMENTS_FILE_PATH, OUTPUT_DIR } from './constants';
 
 const console = {
   log: warn,
@@ -24,7 +25,7 @@ interface Attachment {
   binaryData: Buffer;
 };
 
-type AttachmentsByRepository = Record<string, { repoUrl: string, uniqueGitTag: string, attachments: Array<Attachment> }>;
+export type AttachmentsByRepository = Record<string, { repoUrl: string, uniqueGitTag: string, attachments: Array<Attachment> }>;
 
 // Creates new attachments and replaces old links
 export const migrateAttachments = async (
@@ -151,16 +152,14 @@ export const migrateAttachments = async (
   }
 };
 async function updateAttachmentOutput(attachmentsByRepo: AttachmentsByRepository) {
-  const attachmentsFolderPath = path.resolve(__dirname, '../output/attachments/');
-  const attachmentsFilePath = path.resolve(attachmentsFolderPath, 'new-attachments.json');
 
-  if (!fs.existsSync(attachmentsFolderPath)) {
-    await fs.promises.mkdir(attachmentsFolderPath, { recursive: true });
+  if (!fs.existsSync(OUTPUT_DIR)) {
+    await fs.promises.mkdir(OUTPUT_DIR, { recursive: true });
   }
 
   let existingAttachments: AttachmentsByRepository = {};
-  if (fs.existsSync(attachmentsFilePath)) {
-    const fileContent = await fs.promises.readFile(attachmentsFilePath, 'utf-8');
+  if (fs.existsSync(ATTACHMENTS_FILE_PATH)) {
+    const fileContent = await fs.promises.readFile(ATTACHMENTS_FILE_PATH, 'utf-8');
     existingAttachments = JSON.parse(fileContent);
   }
 
@@ -173,6 +172,6 @@ async function updateAttachmentOutput(attachmentsByRepo: AttachmentsByRepository
     }
   }
 
-  await fs.promises.writeFile(attachmentsFilePath, JSON.stringify(existingAttachments, null, 2));
+  await fs.promises.writeFile(ATTACHMENTS_FILE_PATH, JSON.stringify(existingAttachments, null, 2));
 }
 

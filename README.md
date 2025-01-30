@@ -196,6 +196,10 @@ If this is set to true (default is false) then a file called "users.txt" wil be 
 usernames that contributed to the repository. You can use this with dryRun when you need to map users
 for the migration, but you do not know all the source usernames.
 
+### Dry Run Enforcement
+
+If the target repository has any existing issues, the dry run mode will be automatically enforced to prevent any unintended overwrites or conflicts. This ensures that the migration process can be safely tested without making any changes to the target repository. This will be forced to ensure that the migration state doesn't corrupt and issue IDs maintain the correct sequence.
+
 ### useIssueImportAPI
 
 Set to true (default) to enable using the [GitHub preview API for importing issues](https://gist.github.com/jonmagic/5282384165e0f86ef105). This allows setting the date for issues and comments instead of inserting an additional line in the body.

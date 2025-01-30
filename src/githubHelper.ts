@@ -116,6 +116,37 @@ export class GithubHelper {
    */
 
   /**
+   * Check if the repository has any issues
+   */
+  async hasIssues(): Promise<boolean> {
+    try {
+      await utils.sleep(this.delayInMs);
+      //using graphql instead of rest, because rest api returns pull requests even if you pass "pulls: false"
+      const issuesQuery = `
+        query($owner: String!, $repo: String!) {
+          repository(owner: $owner, name: $repo) {
+            issues(first: 1, states: [OPEN, CLOSED]) {
+              totalCount
+            }
+          }
+        }
+      `;
+      const issuesResponse = await this.githubApi.graphql(issuesQuery, {
+        owner: this.githubOwner,
+        repo: this.githubRepo,
+      });
+
+      if ((issuesResponse as any).repository.issues.totalCount > 0) {
+        return true;
+      } else {
+        return false;
+      }
+    } catch (err) {
+      console.error('Could not access GitHub issues');
+      throw err;
+    }
+  }
+  /**
    * Store the new repo id
    */
   async registerRepoId() {
@@ -326,7 +357,7 @@ export class GithubHelper {
       author &&
       ((settings.usermap &&
         settings.usermap[author.username as string] ===
-          settings.github.token_owner) ||
+        settings.github.token_owner) ||
         author.username === settings.github.token_owner)
     );
   }
@@ -455,10 +486,10 @@ export class GithubHelper {
     let bodyConverted = issue.isPlaceholder
       ? issue.description ?? ''
       : await this.convertIssuesAndComments(
-          issue.description ?? '',
-          issue,
-          !this.userIsCreator(issue.author) || !issue.description
-        );
+        issue.description ?? '',
+        issue,
+        !this.userIsCreator(issue.author) || !issue.description
+      );
 
     let props: IssueImport = {
       title: issue.title ? issue.title.trim() : '',
@@ -539,7 +570,7 @@ export class GithubHelper {
       let userIsPoster =
         (settings.usermap &&
           settings.usermap[note.author.username] ===
-            settings.github.token_owner) ||
+          settings.github.token_owner) ||
         note.author.username === settings.github.token_owner;
 
       comments.push({
@@ -757,13 +788,13 @@ export class GithubHelper {
     );
 
     let githubMilestone: RestEndpointMethodTypes['issues']['createMilestone']['parameters'] =
-      {
-        owner: this.githubOwner,
-        repo: this.githubRepo,
-        title: milestone.title,
-        description: bodyConverted,
-        state: milestone.state === 'active' ? 'open' : 'closed',
-      };
+    {
+      owner: this.githubOwner,
+      repo: this.githubRepo,
+      title: milestone.title,
+      description: bodyConverted,
+      state: milestone.state === 'active' ? 'open' : 'closed',
+    };
 
     if (milestone.due_date) {
       githubMilestone.due_on = milestone.due_date + 'T00:00:00Z';
@@ -1296,7 +1327,7 @@ export class GithubHelper {
     // These regexes will capture ~this as a label. If it is among the migrated
     // labels, then it will be linked.
 
-    let labelReplacer = (label: string) => {};
+    let labelReplacer = (label: string) => { };
 
     // // Single word named label
     // if (hasProjectmap) {

@@ -86,6 +86,7 @@ export class GitlabHelper {
     } catch (err) {
       console.error('An Error occured while fetching all GitLab projects:');
       console.error(err);
+      throw err;
     }
   }
 
@@ -99,6 +100,7 @@ export class GitlabHelper {
     } catch (err) {
       console.error('An Error occured while fetching all GitLab projects:');
       console.error(err);
+      throw err;
     }
   }
 
