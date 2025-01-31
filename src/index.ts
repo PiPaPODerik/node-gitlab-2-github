@@ -273,11 +273,16 @@ async function migrate() {
   async function recreateOutputDirectory() {
 
     if (fs.existsSync(OUTPUT_DIR)) {
-      await fs.promises.rm(OUTPUT_DIR, { recursive: true, force: true });
-      console.log(`Deleted ${OUTPUT_DIR} directory.`);
+      const files = await fs.promises.readdir(OUTPUT_DIR);
+      for (const file of files) {
+        await fs.promises.rm(`${OUTPUT_DIR}/${file}`, { recursive: true, force: true });
+      }
+      console.log(`Deleted contents of ${OUTPUT_DIR} directory.`);
+    } else {
+      await fs.promises.mkdir(OUTPUT_DIR);
+      console.debug(`Created ${OUTPUT_DIR} directory.`);
     }
-    await fs.promises.mkdir(OUTPUT_DIR);
-    console.debug(`Created ${OUTPUT_DIR} directory.`);
+    
     await fs.promises.writeFile(ATTACHMENTS_FILE_PATH, JSON.stringify({} as AttachmentsByRepository, null, 2));
   }
 }
