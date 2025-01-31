@@ -266,7 +266,9 @@ async function migrate() {
 
   console.log('\n\nTransfer complete!\n\n');
 
-  logDryRunEnforced();
+  if (settings.dryRun) {
+    logDryRunEnforced();
+  }
 
   async function recreateOutputDirectory() {
 
