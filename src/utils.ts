@@ -4,7 +4,6 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import S3 from 'aws-sdk/clients/s3';
 import { GitlabHelper } from './gitlabHelper';
-import { runTimeStamp } from './runTimeStamp';
 
 import { warn, error, debug } from 'loglevel';
 import * as fs from 'fs';
@@ -135,9 +134,9 @@ export const migrateAttachments = async (
   }
 
   function createattachmentInfo(targetBasePath: string, basename: string, attachmentBuffer: Buffer) {
-    const uniqueGitTag = `attachments-from-gitlab-${runTimeStamp.replace(/[^a-zA-Z0-9-]/g, '-')}`;
     const repoUrl = `https://github.com/${githubOwner}/${githubRepo}.git`.replace(/\.git\/?$/, '.git');
     const repoId = generateHash(repoUrl);
+    const uniqueGitTag = `attachments-from-gitlab-${repoId}`;
     const targetPath = `${targetBasePath}/${repoId}/${basename}`;
     const attachmentUrl = `https://github.com/${githubOwner}/${githubRepo}/blob/${uniqueGitTag}/${targetPath}?raw=true`;
 
