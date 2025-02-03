@@ -949,7 +949,6 @@ export class GithubHelper {
 
       try {
         // try to create the GitHub pull request from the GitLab issue
-        info(`Creating pull request #${mergeRequest.iid}...`);
         const response = await this.githubApi.pulls.create(props);
         return Promise.resolve(response);
       } catch (err) {

@@ -153,7 +153,7 @@ export const migrateAttachments = async (
 async function updateAttachmentOutput(attachmentsByRepo: AttachmentsByRepository) {
 
   if (!fs.existsSync(OUTPUT_DIR)) {
-    await fs.promises.mkdir(OUTPUT_DIR, { recursive: true });
+    throw new Error(`Output directory ${OUTPUT_DIR} does not exist.`);
   }
 
   let existingAttachments: AttachmentsByRepository = {};

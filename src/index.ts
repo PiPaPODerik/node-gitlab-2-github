@@ -218,7 +218,7 @@ async function migrate() {
 
   try {
     // Delete output directory if present
-    await recreateOutputDirectory();
+    await prepareOutputDirectory();
     await enforceDryRunIfNecessary(settings);
     await githubHelper.registerRepoId();
     await gitlabHelper.registerProjectPath(settings.gitlab.projectId);
@@ -270,20 +270,14 @@ async function migrate() {
     logDryRunEnforced();
   }
 
-  async function recreateOutputDirectory() {
-
+  async function prepareOutputDirectory() {
     if (fs.existsSync(OUTPUT_DIR)) {
-      const files = await fs.promises.readdir(OUTPUT_DIR);
-      for (const file of files) {
-        await fs.promises.rm(`${OUTPUT_DIR}/${file}`, { recursive: true, force: true });
-      }
-      console.log(`Deleted contents of ${OUTPUT_DIR} directory.`);
+      await fs.promises.rm(ATTACHMENTS_FILE_PATH, { force: true });
+      console.debug(`Deleted ${ATTACHMENTS_FILE_PATH}.`);
     } else {
       await fs.promises.mkdir(OUTPUT_DIR);
       console.debug(`Created ${OUTPUT_DIR} directory.`);
     }
-    
-    await fs.promises.writeFile(ATTACHMENTS_FILE_PATH, JSON.stringify({} as AttachmentsByRepository, null, 2));
   }
 }
 
