@@ -470,8 +470,8 @@ async function transferIssues() {
   // TODO return all issues via pagination
   let issues = (await gitlabApi.Issues.all({
     projectId: settings.gitlab.projectId,
-    labels: settings.filterByLabel,
-  })) as GitLabIssue[];
+    labels: settings.filterByLabel
+  }).then(issues => issues.filter(issue => !issue.confidential))) as GitLabIssue[];
 
   // sort issues in ascending order of their issue number (by iid)
   issues = issues.sort((a, b) => a.iid - b.iid);
