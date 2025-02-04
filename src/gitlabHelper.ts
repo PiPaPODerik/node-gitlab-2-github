@@ -113,7 +113,7 @@ export class GitlabHelper {
         this.gitlabProjectId,
         issueIid,
         {}
-      );
+      ).then((issueNotes) => issueNotes.filter((issueNote) => !issueNote.confidential));
     } catch (err) {
       console.error(`Could not fetch notes for GitLab issue #${issueIid}.`);
       return [];
