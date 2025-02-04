@@ -471,6 +471,12 @@ export class GithubHelper {
       labels.push('has attachment');
     }
 
+    labels.push('gitlab merge request');
+
+    if (item.state === 'merged') {
+      labels.push('merged');
+    }
+
     return labels;
   }
 
@@ -602,6 +608,10 @@ export class GithubHelper {
     issue: IssueImport,
     comments: CommentImport[]
   ): Promise<number | null> {
+    // see: https://github.com/orgs/community/discussions/27190
+    if (issue.body.length > 65536) {
+      throw `${issue.title} has a body longer than 65536 characters. Please shorten it.`;
+    }
     // create the GitHub issue from the GitLab issue
     let pending = await this.githubApi.request(
       `POST /repos/${settings.github.owner}/${settings.github.repo}/import/issues`,
@@ -1317,6 +1327,15 @@ export class GithubHelper {
       milestoneReplacer(p1, '')
     );
 
+    // Replace github.com URLs to other organizations with redirect.github.com to avoid backlink spam
+    let urlMassager = (str: string) => {
+      return 'redirect.github.com';
+    }
+
+    // Keep owner internal links/back links intact
+    reString = `((?:to|redirect\\.|www\\.)?github\\.com)(?!\\/${settings.github.owner}\\/)`;
+    str = str.replace(new RegExp(reString, 'g'), (_, p1) => urlMassager(p1));
+
     //
     // Label reference conversion
     //
@@ -1360,6 +1379,10 @@ export class GithubHelper {
       this.githubRepo,
     );
 
+    if ('web_url' in item) {
+      str += '\n\n*Migrated from GitLab: ' + item.web_url + '*';
+    }
+
     return str;
   }
 
@@ -1381,6 +1404,7 @@ export class GithubHelper {
       hour: 'numeric',
       minute: 'numeric',
       hour12: false,
+      timeZoneName: 'short',
     };
 
     const formattedDate = new Date(item.created_at).toLocaleString(
@@ -1431,7 +1455,7 @@ export class GithubHelper {
         line = position.old_line;
       }
       const crypto = require('crypto');
-      const hash = crypto.createHash('md5').update(path).digest('hex');
+      const hash = crypto.createHash('sha256').update(path).digest('hex');
       slug = `#diff-${hash}${side}${line}`;
     }
     // Mention the file and line number. If we can't get this for some reason then use the commit id instead.

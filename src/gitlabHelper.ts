@@ -137,7 +137,7 @@ export class GitlabHelper {
       ).data;
       return Buffer.from(data, 'binary');
     } catch (err) {
-      console.error(`Could not download attachment ${attachmentUrl}.`);
+      console.error(`Could not download attachment ${attachmentUrl}: ${err.response.statusText}`);
       return null;
     }
   }
