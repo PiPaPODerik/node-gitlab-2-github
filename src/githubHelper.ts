@@ -470,8 +470,11 @@ export class GithubHelper {
     ) {
       labels.push('has attachment');
     }
-
-    labels.push('gitlab merge request');
+    
+    // if source_branch is present, it is likely a merge request
+    if (item?.source_branch !== undefined) {
+      labels.push('gitlab merge request');
+    }
 
     if (item.state === 'merged') {
       labels.push('merged');
