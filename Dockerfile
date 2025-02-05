@@ -23,7 +23,6 @@ WORKDIR /app
 RUN groupadd --gid $USER_GID $USERNAME
 RUN useradd --uid $USER_UID --gid $USER_GID -m $USERNAME
 RUN chown -R $USERNAME /app
-RUN mkdir /app/output && chown -R "$USERNAME" /app/output
 
 # Copy the project contents to the container
 COPY --chown=$USERNAME . /app
