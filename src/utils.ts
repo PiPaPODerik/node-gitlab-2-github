@@ -172,5 +172,6 @@ async function updateAttachmentOutput(attachmentsByRepo: AttachmentsByRepository
   }
 
   await fs.promises.writeFile(ATTACHMENTS_FILE_PATH, JSON.stringify(existingAttachments, null, 2));
+  console.debug(`Updated attachments file at ${ATTACHMENTS_FILE_PATH}`);
 }
 
