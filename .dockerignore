@@ -1,7 +1,6 @@
 .husky/
 .vscode/
 node_modules/
-/output/
 .gitignore
 LICENSE
 README.md

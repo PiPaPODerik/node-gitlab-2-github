@@ -140,7 +140,10 @@ modules.xml
 .idea/
 
 # app output
-/output
+/output/**
 
 # macOS specific files
 .DS_Store
+
+# Do not ignore .gitkeep files
+!.gitkeep
