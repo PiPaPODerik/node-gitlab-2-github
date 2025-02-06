@@ -31,7 +31,7 @@ function transformToApiDownloadUrl(relUrl: string) {
   const fileName = relUrlParts[relUrlParts.length - 1];
   const secret = relUrlParts[relUrlParts.length - 2];
   const projectId = relUrlParts[relUrlParts.length - 4];
-  return `${this.host}/api/v4/projects/${projectId}/uploads/${secret}/${fileName}`
+  return `${projectId}/uploads/${secret}/${fileName}`
 }
 
 // Creates new attachments and replaces old links
@@ -58,8 +58,8 @@ export const migrateAttachments = async (
     const name = match[2];
     const url = match[3];
     const basename = path.basename(url);
-    const attachmentUrl = transformToApiDownloadUrl(url);
-    const attachmentBuffer = await gitlabHelper.getAttachment(attachmentUrl);
+    const attachmentUrlRel = transformToApiDownloadUrl(url);
+    const attachmentBuffer = await gitlabHelper.getAttachment(attachmentUrlRel);
     const attachments: AttachmentsByRepository = {};
 
     if (s3 && s3.bucket) {
@@ -115,9 +115,9 @@ export const migrateAttachments = async (
         console.error(`Failed to get attachment for URL: ${url}`);
         continue;
       }
-      
+
       const targetBasePath = '.github-migration/attachments';
-      const { repoId, repoUrl, uniqueGitTag, attachmentUrl, targetPath} = createattachmentInfo(targetBasePath, basename, attachmentBuffer);
+      const { repoId, repoUrl, uniqueGitTag, attachmentUrl, targetPath } = createattachmentInfo(targetBasePath, basename, attachmentBuffer);
       updateattachments({ repoId, repoUrl, uniqueGitTag, attachment: { attachmentUrl, targetPath, binaryData: attachmentBuffer }, attachments });
 
       offsetToAttachment[
