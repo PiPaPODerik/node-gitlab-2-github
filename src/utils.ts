@@ -8,6 +8,7 @@ import { GitlabHelper } from './gitlabHelper';
 import { warn, error, debug } from 'loglevel';
 import * as fs from 'fs';
 import { ATTACHMENTS_FILE_PATH, OUTPUT_DIR } from './constants';
+import settings from '../settings';
 
 const console = {
   log: warn,
@@ -26,11 +27,12 @@ interface Attachment {
 
 export type AttachmentsByRepository = Record<string, { repoUrl: string, uniqueGitTag: string, attachments: Array<Attachment> }>;
 
-function transformToApiDownloadUrl(relUrl: string) {
+function transformToApiDownloadUrl(relUrl: string, gitlabProjectId: string | number) {
   const relUrlParts = relUrl.split('/');
   const fileName = relUrlParts[relUrlParts.length - 1];
   const secret = relUrlParts[relUrlParts.length - 2];
-  const projectId = relUrlParts[relUrlParts.length - 4];
+  let projectId = relUrlParts[relUrlParts.length - 4] || gitlabProjectId.toString();
+
   return `${projectId}/uploads/${secret}/${fileName}`
 }
 
@@ -58,7 +60,7 @@ export const migrateAttachments = async (
     const name = match[2];
     const url = match[3];
     const basename = path.basename(url);
-    const attachmentUrlRel = transformToApiDownloadUrl(url);
+    const attachmentUrlRel = transformToApiDownloadUrl(url, settings.gitlab.projectId);
     const attachmentBuffer = await gitlabHelper.getAttachment(attachmentUrlRel);
     const attachments: AttachmentsByRepository = {};
 
