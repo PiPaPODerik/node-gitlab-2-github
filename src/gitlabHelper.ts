@@ -125,7 +125,7 @@ export class GitlabHelper {
    */
   async getAttachment(urlRel: string) {
     
-    const url = new URL(`${this.host}${urlRel}`);
+    const url = new URL(`${this.host}/api/v4/projects/${urlRel}`);
     try {
       const data = (
         await axios.get(url.toString(), {
