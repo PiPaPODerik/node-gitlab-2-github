@@ -274,6 +274,7 @@ async function migrate() {
     if (fs.existsSync(OUTPUT_DIR)) {
       await fs.promises.rm(ATTACHMENTS_FILE_PATH, { force: true });
       console.debug(`Deleted ${ATTACHMENTS_FILE_PATH}.`);
+      await fs.promises.writeFile(ATTACHMENTS_FILE_PATH, JSON.stringify({}), 'utf8');
     } else {
       await fs.promises.mkdir(OUTPUT_DIR);
       console.debug(`Created ${OUTPUT_DIR} directory.`);
