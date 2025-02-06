@@ -33,6 +33,8 @@ function transformToApiDownloadUrl(relUrl: string, gitlabProjectId: string | num
   const secret = relUrlParts[relUrlParts.length - 2];
   let projectId = relUrlParts[relUrlParts.length - 4] || gitlabProjectId.toString();
 
+  const transformedUrl = `${projectId}/uploads/${secret}/${fileName}`;
+  console.debug(`Transformed URL: from ${relUrl} to ${transformedUrl}`);
   return `${projectId}/uploads/${secret}/${fileName}`
 }
 
