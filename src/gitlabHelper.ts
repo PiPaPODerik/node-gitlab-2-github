@@ -124,9 +124,10 @@ export class GitlabHelper {
    * Gets attachment using http get
    */
   async getAttachment(urlRel: string) {
+    const url = `${this.host}/api/v4/projects/${urlRel}`;
     try {
       const data = (
-        await axios.get(`${this.host}/api/v4/projects/${urlRel}`, {
+        await axios.get(url, {
           responseType: 'arraybuffer',
           headers: {
             'PRIVATE-TOKEN': this.gitlabToken,
