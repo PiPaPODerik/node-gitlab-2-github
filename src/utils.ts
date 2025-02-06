@@ -26,6 +26,14 @@ interface Attachment {
 
 export type AttachmentsByRepository = Record<string, { repoUrl: string, uniqueGitTag: string, attachments: Array<Attachment> }>;
 
+function transformToApiDownloadUrl(relUrl: string) {
+  const relUrlParts = relUrl.split('/');
+  const fileName = relUrlParts[relUrlParts.length - 1];
+  const secret = relUrlParts[relUrlParts.length - 2];
+  const projectId = relUrlParts[relUrlParts.length - 4];
+  return `${this.host}/api/v4/projects/${projectId}/uploads/${secret}/${fileName}`
+}
+
 // Creates new attachments and replaces old links
 export const migrateAttachments = async (
   body: string,
@@ -50,7 +58,8 @@ export const migrateAttachments = async (
     const name = match[2];
     const url = match[3];
     const basename = path.basename(url);
-    const attachmentBuffer = await gitlabHelper.getAttachment(url);
+    const attachmentUrl = transformToApiDownloadUrl(url);
+    const attachmentBuffer = await gitlabHelper.getAttachment(attachmentUrl);
     const attachments: AttachmentsByRepository = {};
 
     if (s3 && s3.bucket) {

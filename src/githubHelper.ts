@@ -1379,7 +1379,7 @@ export class GithubHelper {
       settings.s3,
       this.gitlabHelper,
       this.githubOwner,
-      this.githubRepo,
+      this.githubRepo
     );
 
     if ('web_url' in item) {

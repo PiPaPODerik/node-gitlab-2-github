@@ -123,12 +123,10 @@ export class GitlabHelper {
   /**
    * Gets attachment using http get
    */
-  async getAttachment(relurl: string) {
-    const attachmentUrl = this.transformAttachmentUrl(relurl);
-
+  async getAttachment(url: string) {
     try {
       const data = (
-        await axios.get(attachmentUrl, {
+        await axios.get(url, {
           responseType: 'arraybuffer',
           headers: {
             'PRIVATE-TOKEN': this.gitlabToken,
@@ -137,16 +135,9 @@ export class GitlabHelper {
       ).data;
       return Buffer.from(data, 'binary');
     } catch (err) {
-      console.error(`Could not download attachment ${attachmentUrl}: ${err.response.statusText}`);
+      console.error(`Could not download attachment ${url} : ${err.response.statusText}`);
       return null;
     }
-  }
-
-  transformAttachmentUrl(relUrl: string) {
-    const relUrlParts = relUrl.split('/');
-    const fileName = relUrlParts[relUrlParts.length - 1];
-    const secret = relUrlParts[relUrlParts.length - 2];
-    return `${this.host}/api/v4/projects/${this.gitlabProjectId}/uploads/${secret}/${fileName}`
   }
 
   /**
