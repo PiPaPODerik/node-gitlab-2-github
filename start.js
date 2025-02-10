@@ -18,7 +18,7 @@ if (fs.existsSync(settingsFilePath)) {
   throw new Error(`Settings file not found: ${settingsFilePath} ...Aborting. Please provide the path to settings.ts`);
 }
 
-if (path.dirname(settingsFilePath) !== path.parse(__dirname).dir) {
+if (path.dirname(settingsFilePath) !== __dirname) {
   const destinationPath = path.join(__dirname, path.basename(settingsFilePath));
   fs.copyFileSync(settingsFilePath, destinationPath);
   console.log(`Copied settings file from ${settingsFilePath} to: ${destinationPath}`);
