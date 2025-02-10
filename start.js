@@ -21,7 +21,7 @@ if (fs.existsSync(settingsFilePath)) {
 if (path.dirname(settingsFilePath) !== path.parse(__dirname).dir) {
   const destinationPath = path.join(__dirname, path.basename(settingsFilePath));
   fs.copyFileSync(settingsFilePath, destinationPath);
-  console.debug(`Copied settings file to: ${destinationPath}`);
+  console.log(`Copied settings file from ${settingsFilePath} to: ${destinationPath}`);
 }
 
 const tsNodeRegister = '-r ts-node/register';
