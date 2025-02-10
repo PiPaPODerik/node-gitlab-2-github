@@ -32,5 +32,8 @@ USER $USERNAME
 # Install dependencies
 RUN npm ci
 
+# Ensure the inputs-outputs directory has the correct permissions
+RUN mkdir -p /app/inputs-outputs && chmod -R 666 /app/inputs-outputs
+
 # Start the process
 ENTRYPOINT ["/bin/bash", "-c", "npm run start"]
