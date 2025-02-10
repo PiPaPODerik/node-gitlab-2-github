@@ -217,8 +217,7 @@ async function migrate() {
   //
 
   try {
-    // Delete output directory if present
-    await prepareOutputs();
+    await prepareOutputs(ATTACHMENTS_FILE_PATH);
     await enforceDryRunIfNecessary(settings);
     await githubHelper.registerRepoId();
     await gitlabHelper.registerProjectPath(settings.gitlab.projectId);
@@ -270,14 +269,13 @@ async function migrate() {
     logDryRunEnforced();
   }
 
-  async function prepareOutputs() {
-    const attachmentJsonPath = process.env.ATTACHMENT_JSON_PATH || ATTACHMENTS_FILE_PATH;
-    console.debug(`Using attatchment.json path: ${attachmentJsonPath}`);
+  async function prepareOutputs(attachmentJsonPath) {
+    console.log(`Using attatchment.json path: ${attachmentJsonPath}`);
     if (fs.existsSync(attachmentJsonPath)) {
       await fs.promises.rm(attachmentJsonPath, { force: true });
       console.debug(`Deleted ${attachmentJsonPath}.`);
     }
-    await fs.promises.writeFile(attachmentJsonPath, JSON.stringify({}), 'utf8');
+    await fs.promises.writeFile(attachmentJsonPath, JSON.stringify({}), { encoding: 'utf8', mode: 0o666 });
     console.debug(`Created ${attachmentJsonPath} with content '{}'`);
   }
 }
