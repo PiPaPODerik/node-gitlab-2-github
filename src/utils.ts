@@ -7,7 +7,7 @@ import { GitlabHelper } from './gitlabHelper';
 
 import { warn, error, debug } from 'loglevel';
 import * as fs from 'fs';
-import { ATTACHMENTS_FILE_PATH, OUTPUT_DIR } from './constants';
+import { ATTACHMENTS_FILE_PATH } from './intput-output-files';
 import settings from '../settings';
 
 const console = {
@@ -164,10 +164,6 @@ export const migrateAttachments = async (
   }
 };
 async function updateAttachmentOutput(attachmentsByRepo: AttachmentsByRepository) {
-
-  if (!fs.existsSync(OUTPUT_DIR)) {
-    throw new Error(`Output directory ${OUTPUT_DIR} does not exist.`);
-  }
 
   let existingAttachments: AttachmentsByRepository = {};
   if (fs.existsSync(ATTACHMENTS_FILE_PATH)) {

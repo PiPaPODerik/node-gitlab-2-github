@@ -16,15 +16,15 @@ import * as fs from 'fs';
 
 import AWS from 'aws-sdk';
 
-import { 
+import {
   levels as logLevels,
-  setLevel as setLogLevel, 
+  setLevel as setLogLevel,
   error,
   debug,
   warn
 } from 'loglevel';
 import { AttachmentsByRepository } from './utils';
-import { ATTACHMENTS_FILE_PATH, OUTPUT_DIR } from './constants';
+import { ATTACHMENTS_FILE_PATH } from './intput-output-files';
 import Settings from './settings';
 
 const console = {
@@ -218,7 +218,7 @@ async function migrate() {
 
   try {
     // Delete output directory if present
-    await prepareOutputDirectory();
+    await prepareOutputs();
     await enforceDryRunIfNecessary(settings);
     await githubHelper.registerRepoId();
     await gitlabHelper.registerProjectPath(settings.gitlab.projectId);
@@ -233,7 +233,7 @@ async function migrate() {
       );
     }
 
-    if (settings.transfer.labels) {   
+    if (settings.transfer.labels) {
       await transferLabels(true, settings.conversion.useLowerCaseLabels);
     }
 
@@ -270,15 +270,15 @@ async function migrate() {
     logDryRunEnforced();
   }
 
-  async function prepareOutputDirectory() {
-    if (fs.existsSync(OUTPUT_DIR)) {
-      await fs.promises.rm(ATTACHMENTS_FILE_PATH, { force: true });
-      console.debug(`Deleted ${ATTACHMENTS_FILE_PATH}.`);
-      await fs.promises.writeFile(ATTACHMENTS_FILE_PATH, JSON.stringify({}), 'utf8');
-    } else {
-      await fs.promises.mkdir(OUTPUT_DIR);
-      console.debug(`Created ${OUTPUT_DIR} directory.`);
+  async function prepareOutputs() {
+    const attachmentJsonPath = process.env.ATTACHMENT_JSON_PATH || ATTACHMENTS_FILE_PATH;
+    console.debug(`Using attatchment.json path: ${attachmentJsonPath}`);
+    if (fs.existsSync(attachmentJsonPath)) {
+      await fs.promises.rm(attachmentJsonPath, { force: true });
+      console.debug(`Deleted ${attachmentJsonPath}.`);
     }
+    await fs.promises.writeFile(attachmentJsonPath, JSON.stringify({}), 'utf8');
+    console.debug(`Created ${attachmentJsonPath} with content '{}'`);
   }
 }
 
