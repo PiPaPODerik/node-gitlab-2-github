@@ -2,7 +2,7 @@
   "compilerOptions": {
     "allowJs": false,
     "lib": ["es2020.string"],
-    "target": "es5",
+    "target": "es6",
     "downlevelIteration": true,
     //"strict": true,
     "esModuleInterop": true
