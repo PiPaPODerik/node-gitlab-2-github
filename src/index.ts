@@ -23,7 +23,7 @@ import {
   debug,
   warn
 } from 'loglevel';
-import { AttachmentsByRepository } from './utils';
+
 import { ATTACHMENTS_FILE_PATH } from './intput-output-files';
 import Settings from './settings';
 

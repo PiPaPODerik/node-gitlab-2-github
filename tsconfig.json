@@ -5,7 +5,12 @@
     "target": "es6",
     "downlevelIteration": true,
     //"strict": true,
-    "esModuleInterop": true
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "baseUrl": "./",
+    "paths": {
+      "settings": ["./settings.ts"]
+    }
   },
   "include": ["./src/**/*", "settings.ts"]
 }

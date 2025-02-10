@@ -7,7 +7,7 @@ import { GitlabHelper } from './gitlabHelper';
 
 import { warn, error, debug } from 'loglevel';
 import * as fs from 'fs';
-import { ATTACHMENTS_FILE_PATH } from './intput-output-files';
+import { ATTACHMENTS_FILE_PATH, INPUTS_OUTPUTS_DIR } from './intput-output-files';
 import settings from '../settings';
 
 const console = {
@@ -22,7 +22,7 @@ export const sleep = (milliseconds: number) => {
 interface Attachment {
   attachmentUrl: string;
   targetPath: string;
-  binaryData: Buffer;
+  filePath: fs.PathLike;
 };
 
 export type AttachmentsByRepository = Record<string, { repoUrl: string, uniqueGitTag: string, attachments: Array<Attachment> }>;
@@ -121,8 +121,9 @@ export const migrateAttachments = async (
       }
 
       const targetBasePath = '.github-migration/attachments';
-      const { repoId, repoUrl, uniqueGitTag, attachmentUrl, targetPath } = createattachmentInfo(targetBasePath, basename, attachmentBuffer);
-      updateattachments({ repoId, repoUrl, uniqueGitTag, attachment: { attachmentUrl, targetPath, binaryData: attachmentBuffer }, attachments });
+      const { repoId, repoUrl, uniqueGitTag, attachmentUrl, targetPath } = createattachmentInfo(targetBasePath, basename);
+      const filePath = await writeAttachmentToDisk(attachmentBuffer, basename, uniqueGitTag);
+      updateattachments({ repoId, repoUrl, uniqueGitTag, attachment: { attachmentUrl, targetPath, filePath }, attachments });
 
       offsetToAttachment[
         match.index as number
@@ -146,7 +147,7 @@ export const migrateAttachments = async (
     }
   }
 
-  function createattachmentInfo(targetBasePath: string, basename: string, attachmentBuffer: Buffer) {
+  function createattachmentInfo(targetBasePath: string, basename: string) {
     const repoUrl = `https://github.com/${githubOwner}/${githubRepo}.git`.replace(/\.git\/?$/, '.git');
     const repoId = generateHash(repoUrl);
     const uniqueGitTag = `attachments-from-gitlab-${repoId}`;
@@ -183,4 +184,13 @@ async function updateAttachmentOutput(attachmentsByRepo: AttachmentsByRepository
   await fs.promises.writeFile(ATTACHMENTS_FILE_PATH, JSON.stringify(existingAttachments, null, 2));
   console.debug(`Updated attachments file at ${ATTACHMENTS_FILE_PATH}`);
 }
+async function writeAttachmentToDisk(buffer: Buffer, originalName: string, uniqueGitTag: string): Promise<string> {
+  const hash = crypto.createHash('sha256');
+  hash.update(originalName);
+  const hashedName = hash.digest('hex') + path.extname(originalName);
+  const filePath = path.join(INPUTS_OUTPUTS_DIR , 'attachments', uniqueGitTag, hashedName);
 
+  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.promises.writeFile(filePath, buffer);
+  return filePath;
+}
