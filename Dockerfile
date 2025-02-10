@@ -1,4 +1,4 @@
-FROM node:16-bullseye-slim
+FROM node:23-bullseye-slim
 
 
 LABEL version="0.1.5"
