@@ -26,7 +26,8 @@ interface Attachment {
 };
 
 export type AttachmentsByRepository = Record<string, { repoUrl: string, uniqueGitTag: string, attachments: Array<Attachment> }>;
-
+let openFileHandles = 0;
+export const getOpenFileHandles = () => openFileHandles;
 const newAttachments: AttachmentsByRepository = {};
 
 export async function writeAttachmentsInfoToDisk(targetPath: string) {
@@ -127,9 +128,9 @@ export const migrateAttachments = async (
       }
 
       const targetBasePath = '.github-migration/attachments';
-      const { repoId, repoUrl, repoName, uniqueGitTag, attachmentUrl, targetPath } = createattachmentInfo(targetBasePath, fileBasename);
-      const filePath = await writeAttachmentToDisk(attachmentBuffer, fileBasename, repoId, repoName);
-      updateattachments({ repoId, repoUrl, uniqueGitTag, attachment: { attachmentUrl, targetPath, filePath }, attachments });
+      const { repoId, repoUrl, uniqueGitTag, attachmentUrl, targetPath, outputFilePath } = createattachmentInfo({targetBasePath, fileName: fileBasename, githubOwner, githubRepo});
+      writeAttachmentToDisk(attachmentBuffer, outputFilePath); // do not wait increases performance
+      updateattachments({ repoId, repoUrl, uniqueGitTag, attachment: { attachmentUrl, targetPath, filePath: outputFilePath }, attachments });
 
       offsetToAttachment[
         match.index as number
@@ -153,27 +154,28 @@ export const migrateAttachments = async (
     }
   }
 
-  function createattachmentInfo(targetBasePath: string, fileName: string) {
+  function createattachmentInfo({targetBasePath, fileName, githubOwner, githubRepo} : {targetBasePath: string, fileName: string, githubOwner: string, githubRepo: string}) {
     const repoUrl = `https://github.com/${githubOwner}/${githubRepo}.git`.replace(/\.git\/?$/, '.git');
     const repoId = generateHash(repoUrl);
     const uniqueGitTag = `attachments-from-gitlab-${repoId}`;
     const targetPath = `${targetBasePath}/${repoId}/${fileName}`;
+
+    const fileNameHash = crypto.randomUUID();
+    const hashedName = `${fileNameHash}-${fileName}`;
+    const repoName = githubRepo;
+    const repoPath = `${repoName}-${repoId}`;
+    const outputFilePath = path.join(INPUTS_OUTPUTS_DIR , 'attachments', repoPath, hashedName);
     const attachmentUrl = `https://github.com/${githubOwner}/${githubRepo}/blob/${uniqueGitTag}/${targetPath}?raw=true`;
 
-    return { repoId, repoUrl, repoName: githubRepo, uniqueGitTag, attachmentUrl, targetPath };
+    return { repoId, repoUrl, uniqueGitTag, attachmentUrl, targetPath, outputFilePath };
   }
 
 };
-function generateHash(stringToHash: string, addSalt: boolean = false) {
+function generateHash(stringToHash: string) {
   const hash = crypto.createHash('md5');
-  if (addSalt) {
-    const salt = crypto.randomBytes(16).toString('hex');
-    hash.update(salt + stringToHash);
-  } else {
-    hash.update(stringToHash);
-  }
-  const uniqueHash = hash.digest('hex');
-  return uniqueHash;
+  hash.update(stringToHash);
+
+  return hash.digest('hex');
 }
 async function updateAttachmentOutput(attachmentsByRepo: AttachmentsByRepository) {
   for (const [repoId, attachmentsInfo] of Object.entries(attachmentsByRepo)) {
@@ -185,13 +187,9 @@ async function updateAttachmentOutput(attachmentsByRepo: AttachmentsByRepository
     }
   }
 }
-async function writeAttachmentToDisk(buffer: Buffer, originalName: string, repoId: string, repoName: string): Promise<string> {
-  const hash = generateHash(originalName, true);
-  const hashedName = `${hash}-${originalName}`;
-  const repoPath = `${repoName}-${repoId}`;
-  const filePath = path.join(INPUTS_OUTPUTS_DIR , 'attachments', repoPath, hashedName);
-
-  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.promises.writeFile(filePath, buffer);
-  return filePath;
+async function writeAttachmentToDisk(buffer: Buffer, targetPath): Promise<void> {
+  return fs.promises.mkdir(path.dirname(targetPath), { recursive: true }).then(() => {
+    openFileHandles++;
+    fs.promises.writeFile(targetPath, buffer).finally(() => { openFileHandles--; });
+  });
 }

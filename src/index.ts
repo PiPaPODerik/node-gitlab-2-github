@@ -26,7 +26,7 @@ import {
 
 import { ATTACHMENTS_FILE_PATH } from './intput-output-files';
 import Settings from './settings';
-import { writeAttachmentsInfoToDisk } from './utils';
+import { getOpenFileHandles, writeAttachmentsInfoToDisk } from './utils';
 
 const console = {
   log: warn,
@@ -265,6 +265,7 @@ async function migrate() {
     process.exit(1);
   }
 
+  await waitForOpenFileHandlesToClose();
   console.log('\n\nTransfer complete!\n\n');
 
   if (settings.dryRun) {
@@ -277,6 +278,13 @@ async function migrate() {
       await fs.promises.rm(attachmentJsonPath, { force: true });
       console.debug(`Deleted ${attachmentJsonPath}.`);
     }
+  }
+}
+
+async function waitForOpenFileHandlesToClose() {
+  while (getOpenFileHandles() > 0) {
+    console.log(`Waiting for ${getOpenFileHandles()} open file handles to close...`);
+    await new Promise(resolve => setTimeout(resolve, 2000));
   }
 }
 
