@@ -26,6 +26,7 @@ import {
 
 import { ATTACHMENTS_FILE_PATH } from './intput-output-files';
 import Settings from './settings';
+import { writeAttachmentsInfoToDisk } from './utils';
 
 const console = {
   log: warn,
@@ -252,6 +253,7 @@ async function migrate() {
         await transferMergeRequests();
       }
     }
+    await writeAttachmentsInfoToDisk(ATTACHMENTS_FILE_PATH);
 
     if (settings.exportUsers) {
       const users = Array.from(githubHelper.users.values()).join("\n");
@@ -275,8 +277,6 @@ async function migrate() {
       await fs.promises.rm(attachmentJsonPath, { force: true });
       console.debug(`Deleted ${attachmentJsonPath}.`);
     }
-    await fs.promises.writeFile(attachmentJsonPath, JSON.stringify({}), { encoding: 'utf8', mode: 0o666 });
-    console.debug(`Created ${attachmentJsonPath} with content '{}'`);
   }
 }
 

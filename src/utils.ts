@@ -7,7 +7,7 @@ import { GitlabHelper } from './gitlabHelper';
 
 import { warn, error, debug } from 'loglevel';
 import * as fs from 'fs';
-import { ATTACHMENTS_FILE_PATH, INPUTS_OUTPUTS_DIR } from './intput-output-files';
+import { INPUTS_OUTPUTS_DIR } from './intput-output-files';
 import settings from '../settings';
 
 const console = {
@@ -26,6 +26,13 @@ interface Attachment {
 };
 
 export type AttachmentsByRepository = Record<string, { repoUrl: string, uniqueGitTag: string, attachments: Array<Attachment> }>;
+
+const newAttachments: AttachmentsByRepository = {};
+
+export async function writeAttachmentsInfoToDisk(targetPath: string) {
+  await fs.promises.writeFile(targetPath, JSON.stringify(newAttachments, null, 2));
+  console.debug(`Updated attachments file at ${targetPath}`);
+}
 
 function transformToApiDownloadUrl(relUrl: string, gitlabProjectId: string | number) {
   const relUrlParts = relUrl.split('/');
@@ -48,7 +55,6 @@ export const migrateAttachments = async (
   githubRepo: GithubSettings['repo']
 ) => {
   const regexp = /(!?)\[([^\]]+)\]\((\/uploads[^)]+)\)/g;
-
   // Maps link offset to a new name in S3
   const offsetToAttachment: {
     [key: number]: string;
@@ -61,13 +67,13 @@ export const migrateAttachments = async (
     const prefix = match[1] || '';
     const name = match[2];
     const url = match[3];
-    const basename = path.basename(url);
+    const fileBasename = path.basename(url);
     const attachmentUrlRel = transformToApiDownloadUrl(url, settings.gitlab.projectId);
     const attachmentBuffer = await gitlabHelper.getAttachment(attachmentUrlRel);
     const attachments: AttachmentsByRepository = {};
 
     if (s3 && s3.bucket) {
-      const mimeType = mime.lookup(basename);
+      const mimeType = mime.lookup(fileBasename);
       if (!attachmentBuffer) {
         continue;
       }
@@ -75,7 +81,7 @@ export const migrateAttachments = async (
       // // Generate file name for S3 bucket from URL
       const hash = crypto.createHash('sha256');
       hash.update(url);
-      const newFileName = hash.digest('hex') + '/' + basename;
+      const newFileName = hash.digest('hex') + '/' + fileBasename;
       const relativePath = githubRepoId
         ? `${githubRepoId}/${newFileName}`
         : newFileName;
@@ -100,7 +106,7 @@ export const migrateAttachments = async (
         };
 
         s3bucket.upload(params, function (err, data) {
-          console.log(`\tUploading ${basename} to ${s3url}... `);
+          console.log(`\tUploading ${fileBasename} to ${s3url}... `);
           if (err) {
             console.log('ERROR: ', err);
           } else {
@@ -121,8 +127,8 @@ export const migrateAttachments = async (
       }
 
       const targetBasePath = '.github-migration/attachments';
-      const { repoId, repoUrl, uniqueGitTag, attachmentUrl, targetPath } = createattachmentInfo(targetBasePath, basename);
-      const filePath = await writeAttachmentToDisk(attachmentBuffer, basename, uniqueGitTag);
+      const { repoId, repoUrl, repoName, uniqueGitTag, attachmentUrl, targetPath } = createattachmentInfo(targetBasePath, fileBasename);
+      const filePath = await writeAttachmentToDisk(attachmentBuffer, fileBasename, repoId, repoName);
       updateattachments({ repoId, repoUrl, uniqueGitTag, attachment: { attachmentUrl, targetPath, filePath }, attachments });
 
       offsetToAttachment[
@@ -147,48 +153,43 @@ export const migrateAttachments = async (
     }
   }
 
-  function createattachmentInfo(targetBasePath: string, basename: string) {
+  function createattachmentInfo(targetBasePath: string, fileName: string) {
     const repoUrl = `https://github.com/${githubOwner}/${githubRepo}.git`.replace(/\.git\/?$/, '.git');
     const repoId = generateHash(repoUrl);
     const uniqueGitTag = `attachments-from-gitlab-${repoId}`;
-    const targetPath = `${targetBasePath}/${repoId}/${basename}`;
+    const targetPath = `${targetBasePath}/${repoId}/${fileName}`;
     const attachmentUrl = `https://github.com/${githubOwner}/${githubRepo}/blob/${uniqueGitTag}/${targetPath}?raw=true`;
 
-    return { repoId, repoUrl, uniqueGitTag, attachmentUrl, targetPath };
+    return { repoId, repoUrl, repoName: githubRepo, uniqueGitTag, attachmentUrl, targetPath };
   }
 
-  function generateHash(stringToHash: string) {
-    const hash = crypto.createHash('md5');
-    hash.update(stringToHash);
-    const uniqueHash = hash.digest('hex');
-    return uniqueHash;
-  }
 };
-async function updateAttachmentOutput(attachmentsByRepo: AttachmentsByRepository) {
-
-  let existingAttachments: AttachmentsByRepository = {};
-  if (fs.existsSync(ATTACHMENTS_FILE_PATH)) {
-    const fileContent = await fs.promises.readFile(ATTACHMENTS_FILE_PATH, 'utf-8');
-    existingAttachments = JSON.parse(fileContent);
+function generateHash(stringToHash: string, addSalt: boolean = false) {
+  const hash = crypto.createHash('md5');
+  if (addSalt) {
+    const salt = crypto.randomBytes(16).toString('hex');
+    hash.update(salt + stringToHash);
+  } else {
+    hash.update(stringToHash);
   }
-
+  const uniqueHash = hash.digest('hex');
+  return uniqueHash;
+}
+async function updateAttachmentOutput(attachmentsByRepo: AttachmentsByRepository) {
   for (const [repoId, attachmentsInfo] of Object.entries(attachmentsByRepo)) {
-    const existingAttachment = existingAttachments[repoId];
+    const existingAttachment = newAttachments[repoId];
     if (existingAttachment) {
       existingAttachment.attachments.push(...attachmentsInfo.attachments);
     } else {
-      existingAttachments[repoId] = attachmentsInfo;
+      newAttachments[repoId] = attachmentsInfo;
     }
   }
-
-  await fs.promises.writeFile(ATTACHMENTS_FILE_PATH, JSON.stringify(existingAttachments, null, 2));
-  console.debug(`Updated attachments file at ${ATTACHMENTS_FILE_PATH}`);
 }
-async function writeAttachmentToDisk(buffer: Buffer, originalName: string, uniqueGitTag: string): Promise<string> {
-  const hash = crypto.createHash('sha256');
-  hash.update(originalName);
-  const hashedName = hash.digest('hex') + path.extname(originalName);
-  const filePath = path.join(INPUTS_OUTPUTS_DIR , 'attachments', uniqueGitTag, hashedName);
+async function writeAttachmentToDisk(buffer: Buffer, originalName: string, repoId: string, repoName: string): Promise<string> {
+  const hash = generateHash(originalName, true);
+  const hashedName = `${hash}-${originalName}`;
+  const repoPath = `${repoName}-${repoId}`;
+  const filePath = path.join(INPUTS_OUTPUTS_DIR , 'attachments', repoPath, hashedName);
 
   await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
   await fs.promises.writeFile(filePath, buffer);
