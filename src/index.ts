@@ -161,7 +161,7 @@ function createPlaceholderMilestone(expectedIdx: number): MilestoneImport {
     iid: expectedIdx,
     title: `[PLACEHOLDER] - for milestone #${expectedIdx}`,
     description:
-      'This is to ensure that milestone numbers in GitLab and GitHub are the same',
+      'This milestone does not exist on GitLab and only exists to ensure that milestone numbers in GitLab and GitHub are the same, to ensure proper linking with milestones. If the migration was successful, this milestone can be deleted.',
     state: 'closed',
   };
 }
@@ -177,7 +177,7 @@ function createPlaceholderIssue(expectedIdx: number): Partial<GitLabIssue> {
     iid: expectedIdx,
     title: `[PLACEHOLDER] - for issue #${expectedIdx}`,
     description:
-      'This is to ensure that issue numbers in GitLab and GitHub are the same',
+      'This issue does not exist on GitLab and only exists to ensure that issue numbers in GitLab and GitHub are the same, to ensure proper linking between issues. If the migration was successful, this issue can be deleted.',
     state: 'closed',
     isPlaceholder: true,
   };
