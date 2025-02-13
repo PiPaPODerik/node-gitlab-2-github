@@ -28,10 +28,10 @@ interface Attachment {
 export type AttachmentsByRepository = Record<string, { repoUrl: string, uniqueGitTag: string, attachments: Array<Attachment> }>;
 let openFileHandles = 0;
 export const getOpenFileHandles = () => openFileHandles;
-const newAttachments: AttachmentsByRepository = {};
+const attachments: AttachmentsByRepository = {};
 
 export async function writeAttachmentsInfoToDisk(targetPath: string) {
-  await fs.promises.writeFile(targetPath, JSON.stringify(newAttachments, null, 2));
+  await fs.promises.writeFile(targetPath, JSON.stringify(attachments, null, 2));
   console.debug(`Updated attachments file at ${targetPath}`);
 }
 
@@ -71,7 +71,6 @@ export const migrateAttachments = async (
     const fileBasename = path.basename(url);
     const attachmentUrlRel = transformToApiDownloadUrl(url, settings.gitlab.projectId);
     const attachmentBuffer = await gitlabHelper.getAttachment(attachmentUrlRel);
-    const attachments: AttachmentsByRepository = {};
 
     if (s3 && s3.bucket) {
       const mimeType = mime.lookup(fileBasename);
@@ -136,8 +135,6 @@ export const migrateAttachments = async (
         match.index as number
       ] = `${prefix}[${name}](${attachmentUrl})`;
     }
-
-    await updateAttachmentOutput(attachments);
   }
 
   return body.replace(
@@ -177,18 +174,9 @@ function generateHash(stringToHash: string) {
 
   return hash.digest('hex');
 }
-async function updateAttachmentOutput(attachmentsByRepo: AttachmentsByRepository) {
-  for (const [repoId, attachmentsInfo] of Object.entries(attachmentsByRepo)) {
-    const existingAttachment = newAttachments[repoId];
-    if (existingAttachment) {
-      existingAttachment.attachments.push(...attachmentsInfo.attachments);
-    } else {
-      newAttachments[repoId] = attachmentsInfo;
-    }
-  }
-}
-async function writeAttachmentToDisk(buffer: Buffer, targetPath): Promise<void> {
-  return fs.promises.mkdir(path.dirname(targetPath), { recursive: true }).then(() => {
+
+function writeAttachmentToDisk(buffer: Buffer, targetPath) {
+  fs.promises.mkdir(path.dirname(targetPath), { recursive: true }).then(() => {
     openFileHandles++;
     fs.promises.writeFile(targetPath, buffer).finally(() => { openFileHandles--; });
   });
