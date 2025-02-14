@@ -12,6 +12,7 @@ import { warn, error, debug } from 'loglevel';
 
 const console = {
   log: warn,
+  warn: warn,
   error,
   debug,
 }
@@ -117,6 +118,28 @@ export class GitlabHelper {
     } catch (err) {
       console.error(`Could not fetch notes for GitLab issue #${issueIid}.`);
       return [];
+    }
+  }
+
+  /**
+   * Checks if merge requests are enabled for the project.
+   */
+  async areMergeRequestsEnabled(gitlabProjectId: number): Promise<boolean> {
+    try {
+      const project = await this.gitlabApi.Projects.show(gitlabProjectId);
+      
+      if ('merge_requests_enabled' in project) {
+        return project.merge_requests_enabled;
+      } else {
+        console.warn(`Project ${gitlabProjectId} does not have 'merge_requests_enabled' in the response.`);
+        return false;
+      }
+    } catch (err: any) {
+      console.error(`Error fetching project ${gitlabProjectId}: ${err.message}`);
+      if (err.response) {
+        console.error(`GitLab API response: ${err.response.status} - ${err.response.statusText}`);
+      }
+      return false;
     }
   }
 

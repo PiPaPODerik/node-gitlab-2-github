@@ -246,13 +246,12 @@ async function migrate() {
       await transferIssues();
     }
 
-    if (settings.transfer.mergeRequests) {
-      if (settings.mergeRequests.log) {
-        await logMergeRequests(settings.mergeRequests.logFile);
-      } else {
-        await transferMergeRequests();
-      }
+    if (settings.transfer.mergeRequests && await gitlabHelper.areMergeRequestsEnabled(settings.gitlab.projectId)) {
+      settings.mergeRequests.log ? await logMergeRequests(settings.mergeRequests.logFile) : await transferMergeRequests();
+    } else {
+      console.warn('Merge requests are disabled for this project. Skipping merge request migration.');
     }
+
     await writeAttachmentsInfoToDisk(ATTACHMENTS_FILE_PATH);
 
     if (settings.exportUsers) {
@@ -789,4 +788,3 @@ async function enforceDryRunIfNecessary(settings: Settings) {
     logDryRunEnforced();
   }
 }
-
