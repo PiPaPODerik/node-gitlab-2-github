@@ -134,7 +134,7 @@ export class GitlabHelper {
         console.warn(`Project ${gitlabProjectId} does not have 'merge_requests_enabled' in the response.`);
         return false;
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error(`Error fetching project ${gitlabProjectId}: ${err.message}`);
       if (err.response) {
         console.error(`GitLab API response: ${err.response.status} - ${err.response.statusText}`);
