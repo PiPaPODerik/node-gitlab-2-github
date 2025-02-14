@@ -70,10 +70,10 @@ export const migrateAttachments = async (
     const url = match[3];
     const fileBasename = path.basename(url);
     const attachmentUrlRel = transformToApiDownloadUrl(url, settings.gitlab.projectId);
-    const attachmentBuffer = await gitlabHelper.getAttachment(attachmentUrlRel);
-
+    
     if (s3 && s3.bucket) {
       const mimeType = mime.lookup(fileBasename);
+      const attachmentBuffer = await gitlabHelper.getAttachment(attachmentUrlRel);
       if (!attachmentBuffer) {
         continue;
       }
@@ -120,16 +120,17 @@ export const migrateAttachments = async (
         match.index as number
       ] = `${prefix}[${name}](${s3url})`;
     } else {
-      // Not using S3: default to old URL, adding absolute path
-      if (!attachmentBuffer) {
-        console.error(`Failed to get attachment for URL: ${url}`);
-        continue;
-      }
-
       const targetBasePath = '.github-migration/attachments';
       const { repoId, repoUrl, uniqueGitTag, attachmentUrl, targetPath, outputFilePath } = createattachmentInfo({targetBasePath, fileName: fileBasename, githubOwner, githubRepo});
-      writeAttachmentToDisk(attachmentBuffer, outputFilePath); // do not wait increases performance
-      updateattachments({ repoId, repoUrl, uniqueGitTag, attachment: { attachmentUrl, targetPath, filePath: outputFilePath }, attachments });
+      
+      const data = await gitlabHelper.getAttachment(attachmentUrlRel, true);
+      if (data) {  
+        saveToDisk(outputFilePath, data);
+  
+        updateattachments({ repoId, repoUrl, uniqueGitTag, attachment: { attachmentUrl, targetPath, filePath: outputFilePath }, attachments });
+      } else {
+        console.error(`Failed to get attachment stream for URL: ${url}`);
+      }
 
       offsetToAttachment[
         match.index as number
@@ -168,16 +169,25 @@ export const migrateAttachments = async (
   }
 
 };
+async function saveToDisk(outputFilePath: string, dataStream: fs.ReadStream) {
+  await fs.promises.mkdir(path.dirname(outputFilePath), { recursive: true });
+  
+  const writeStream = fs.createWriteStream(outputFilePath);
+  dataStream.pipe(writeStream);
+  dataStream.on('error', () => { writeStream.close(); console.error(`Failed to read attachment stream`) });
+  dataStream.on('end', () => console.debug(`Finished reading attachment stream`));
+  
+  writeStream.on('open', () => openFileHandles++);
+  writeStream.on('close', () => openFileHandles--);
+  writeStream.on('finish', () => {
+    console.debug(`Finished writing attachment to ${outputFilePath}`);
+  });
+  writeStream.on('error', () => { writeStream.close(); console.error(`Failed to write attachment to ${outputFilePath}`)});
+}
+
 function generateHash(stringToHash: string) {
   const hash = crypto.createHash('md5');
   hash.update(stringToHash);
 
   return hash.digest('hex');
-}
-
-function writeAttachmentToDisk(buffer: Buffer, targetPath) {
-  fs.promises.mkdir(path.dirname(targetPath), { recursive: true }).then(() => {
-    openFileHandles++;
-    fs.promises.writeFile(targetPath, buffer).finally(() => { openFileHandles--; });
-  });
 }

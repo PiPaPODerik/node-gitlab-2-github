@@ -146,19 +146,19 @@ export class GitlabHelper {
   /**
    * Gets attachment using http get
    */
-  async getAttachment(urlRel: string) {
+  async getAttachment(urlRel: string, asStream = false) {
     
     const url = new URL(`${this.host}/api/v4/projects/${urlRel}`);
     try {
       const data = (
         await axios.get(url.toString(), {
-          responseType: 'arraybuffer',
+          responseType: asStream ? 'stream' : 'arraybuffer',
           headers: {
             'PRIVATE-TOKEN': this.gitlabToken,
           },
         })
       ).data;
-      return Buffer.from(data, 'binary');
+      return asStream ? data : Buffer.from(data, 'binary');
     } catch (err) {
       console.error(`Could not download attachment ${url} : ${err?.response?.statusText}`);
       return null;
