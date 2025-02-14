@@ -545,8 +545,32 @@ async function transferIssues() {
           } catch (err) {
             counters.nrOfFailedIssues++;
             console.error(
-              '\t...ERROR: Could not create replacement issue either!'
+              '\t...ERROR: Could not create replacement issue either! Try creating last stand placeholder...'
             );
+
+            try {
+              const nextExpectedId = await githubHelper.getLastIssueId() + 1;
+              if (nextExpectedId === null) {
+                throw new Error('Could not get last issue id from GitHub');
+              }
+              const lastStandIssue: Partial<GitLabIssue> = {
+                iid: nextExpectedId,
+                title: `[ERROR PLACEHOLDER] - for issue #${nextExpectedId}`,
+                description: `
+                Error During Migration of GitLab Issue #${nextExpectedId}:
+
+                Error: ${JSON.stringify(err)}
+                `,
+                state: 'closed',
+                isPlaceholder: true,
+              };
+              await githubHelper.createIssueAndComments(lastStandIssue as GitLabIssue); // HACK: remove type coercion
+            } catch  (err) {
+              console.error(
+                '\t...ERROR: Could not create last stand placeholder either! Aborting...'
+              );
+              throw err;
+            }
           }
         }
       }
