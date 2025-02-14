@@ -118,25 +118,27 @@ export class GithubHelper {
   /**
    * Check if the repository has any issues
    */
-  async hasIssues(): Promise<boolean> {
+  async hasIssuesOrMergeRequets(): Promise<boolean> {
     try {
       await utils.sleep(this.delayInMs);
-      //using graphql instead of rest, because rest api returns pull requests even if you pass "pulls: false"
-      const issuesQuery = `
+      const query = `
         query($owner: String!, $repo: String!) {
           repository(owner: $owner, name: $repo) {
             issues(first: 1, states: [OPEN, CLOSED]) {
               totalCount
             }
+            pullRequests(first: 1, states: [OPEN, CLOSED, MERGED]) {
+              totalCount
+            }
           }
         }
       `;
-      const issuesResponse = await this.githubApi.graphql(issuesQuery, {
+      const response = await this.githubApi.graphql(query, {
         owner: this.githubOwner,
         repo: this.githubRepo,
       });
 
-      if ((issuesResponse as any).repository.issues.totalCount > 0) {
+      if ((response as any).repository.issues.totalCount > 0 || (response as any).repository.pullRequests.totalCount > 0) {
         return true;
       } else {
         return false;
@@ -470,7 +472,7 @@ export class GithubHelper {
     ) {
       labels.push('has attachment');
     }
-    
+
     // if source_branch is present, it is likely a merge request
     if (item?.source_branch !== undefined) {
       labels.push('gitlab merge request');
@@ -1287,9 +1289,8 @@ export class GithubHelper {
         }
       }
       if (milestone) {
-        const repoLink = `${this.githubUrl}/${this.githubOwner}/${
-          repo || this.githubRepo
-        }`;
+        const repoLink = `${this.githubUrl}/${this.githubOwner}/${repo || this.githubRepo
+          }`;
         return `[${milestone.title}](${repoLink}/milestone/${milestone.number})`;
       }
       console.log(

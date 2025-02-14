@@ -42,7 +42,7 @@ const CCERROR = '\x1b[31m%s\x1b[0m'; // red
 const CCWARN = '\x1b[33m%s\x1b[0m'; // yellow
 const CCINFO = '\x1b[36m%s\x1b[0m'; // cyan
 const CCSUCCESS = '\x1b[32m%s\x1b[0m'; // green
-const logDryRunEnforced = () => console.warn('\x1b[1m\x1b[4m\x1b[33m%s\x1b[0m', 'Dry-Run enforced migration NOT performed! There are existing issues in the GitHub repository. Recreate the repository to transfer Issues, Milestones, Labels, and Merge Requests again.');
+const logIssueMigrationSkipped = () => console.warn('\x1b[1m\x1b[4m\x1b[33m%s\x1b[0m', 'Issue and MergeRequst migration NOT performed! There are existing Issues/PullRequests in the GitHub repository, which would lead to inconsisten issue numbers and falty links between issues. Recreate the repository to transfer Issues, Milestones, Labels, and Merge Requests again.');
 
 const counters = {
   nrOfPlaceholderIssues: 0,
@@ -219,7 +219,11 @@ async function migrate() {
 
   try {
     await prepareOutputs(ATTACHMENTS_FILE_PATH);
-    await enforceDryRunIfNecessary(settings);
+    const skipIssueAndMrs = await githubHelper.hasIssuesOrMergeRequets();
+    if (skipIssueAndMrs) {
+      settings.transfer.issues = false;
+      settings.transfer.mergeRequests = false;
+    }
     await githubHelper.registerRepoId();
     await gitlabHelper.registerProjectPath(settings.gitlab.projectId);
 
@@ -254,6 +258,10 @@ async function migrate() {
 
     await writeAttachmentsInfoToDisk(ATTACHMENTS_FILE_PATH);
 
+    if (skipIssueAndMrs) {
+      logIssueMigrationSkipped();
+    }
+    
     if (settings.exportUsers) {
       const users = Array.from(githubHelper.users.values()).join("\n");
       fs.writeFileSync('users.txt', users);
@@ -267,9 +275,6 @@ async function migrate() {
   await waitForOpenFileHandlesToClose();
   console.log('\n\nTransfer complete!\n\n');
 
-  if (settings.dryRun) {
-    logDryRunEnforced();
-  }
 
   async function prepareOutputs(attachmentJsonPath) {
     console.log(`Using attatchment.json path: ${attachmentJsonPath}`);
@@ -780,11 +785,4 @@ function inform(msg: string) {
 
 function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
-}
-
-async function enforceDryRunIfNecessary(settings: Settings) {
-  if (await githubHelper.hasIssues()) {
-    settings.dryRun = true;
-    logDryRunEnforced();
-  }
 }
