@@ -115,40 +115,6 @@ export class GithubHelper {
    ******************************************************************************
    */
 
-
-  /**
-   * Get the last issue ID in the repository using GraphQL
-   */
-  async getLastIssueId(): Promise<number | null> {
-    try {
-      await utils.sleep(this.delayInMs);
-      const query = `
-        query($owner: String!, $repo: String!) {
-          repository(owner: $owner, name: $repo) {
-            issues(last: 1) {
-              nodes {
-                number
-              }
-            }
-          }
-        }
-      `;
-      const response = await this.githubApi.graphql(query, {
-        owner: this.githubOwner,
-        repo: this.githubRepo,
-      });
-
-      const issues = (response as any).repository.issues.nodes;
-      if (issues.length === 0) {
-        return null;
-      }
-
-      return issues[0].number;
-    } catch (err) {
-      console.error('Could not access GitHub issues');
-      throw err;
-    }
-  }
   /**
    * Check if the repository has any issues
    */
