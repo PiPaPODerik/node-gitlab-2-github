@@ -658,14 +658,15 @@ export class GithubHelper {
 
           throw new Error(`Could not import issue: ${JSON.stringify(errorObject)}`);
         }
-      } 
-      console.debug('\tFAILED: ');
-      console.debug(result);
- 
-      console.error('\tERRORS:');
-      console.error(errorObject);
-
-      return null;
+      } else {
+        console.debug('\tFAILED: ');
+        console.debug(result);
+   
+        console.error('\tERRORS:');
+        console.error(errorObject);
+  
+        return null;
+      }
     }
 
     let issue_number = result.data.issue_url.split('/').splice(-1)[0];
