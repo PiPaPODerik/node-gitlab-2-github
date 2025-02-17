@@ -484,7 +484,7 @@ async function transferIssues() {
   let issues = (await gitlabApi.Issues.all({
     projectId: settings.gitlab.projectId,
     labels: settings.filterByLabel
-  }).then(issues => issues.map(issue => issue.confidential ? createPlaceholderIssue(issue, true) : issue))) as GitLabIssue[];
+  })) as GitLabIssue[];
 
   // sort issues in ascending order of their issue number (by iid)
   issues = issues.sort((a, b) => a.iid - b.iid);
@@ -499,14 +499,16 @@ async function transferIssues() {
       // GitLab issue internal Id (iid)
       let expectedIdx = i + 1;
 
-      // is there a gap in the GitLab issues?
+      // is there a gap in the GitLab issues or a confidentail issue?
       // Create placeholder issues so that new GitHub issues will have the same
       // issue number as in GitLab. If a placeholder is used it is because there
-      // was a gap in GitLab issues -- likely caused by a deleted GitLab issue.
-      if (issues[i].iid !== expectedIdx) {
-        issues.splice(i, 0, createPlaceholderIssue(expectedIdx) as GitLabIssue); // HACK: remove type coercion
+      // was a gap in GitLab issues -- likely caused by a deleted or confidential GitLab issue.
+      if (issues[i].iid !== expectedIdx || issues[i].confidential) {
+        issues.splice(i, 0, createPlaceholderIssue(expectedIdx, issues[i].confidential) as GitLabIssue); // HACK: remove type coercion
         counters.nrOfPlaceholderIssues++;
         console.log(
+          issues[i].confidential ? 
+          `Added placeholder issue for GitLab confidential issue #${expectedIdx}.` :
           `Added placeholder issue for GitLab issue #${expectedIdx}.`
         );
       }
