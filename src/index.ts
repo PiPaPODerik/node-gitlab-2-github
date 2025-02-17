@@ -172,12 +172,14 @@ function createPlaceholderMilestone(expectedIdx: number): MilestoneImport {
  * @param expectedIdx Number of the GitLab issue
  * @returns Data for the issue
  */
-function createPlaceholderIssue(expectedIdx: number): Partial<GitLabIssue> {
+function createPlaceholderIssue(expectedIdx: number, forConfidentail: boolean = false): Partial<GitLabIssue> {
+  const normalText = 'This issue does not exist on GitLab and only exists to ensure that issue numbers in GitLab and GitHub are the same, to ensure proper linking between issues. If the migration was successful, this issue can be deleted.';
+  const confidentialText = 'This issue is confidential on GitLab and was excluded during Migration. Otherwise sensitive Inromation would have been leaked. It only exists to ensure that issue numbers in GitLab and GitHub are the same, to ensure proper linking between issues. If the migration was successful, this issue can be deleted.';
+  
   return {
     iid: expectedIdx,
     title: `[PLACEHOLDER] - for issue #${expectedIdx}`,
-    description:
-      'This issue does not exist on GitLab and only exists to ensure that issue numbers in GitLab and GitHub are the same, to ensure proper linking between issues. If the migration was successful, this issue can be deleted.',
+    description: forConfidentail ? confidentialText : normalText,
     state: 'closed',
     isPlaceholder: true,
   };
@@ -482,7 +484,7 @@ async function transferIssues() {
   let issues = (await gitlabApi.Issues.all({
     projectId: settings.gitlab.projectId,
     labels: settings.filterByLabel
-  }).then(issues => issues.filter(issue => !issue.confidential))) as GitLabIssue[];
+  }).then(issues => issues.map(issue => issue.confidential ? createPlaceholderIssue(issue, true) : issue))) as GitLabIssue[];
 
   // sort issues in ascending order of their issue number (by iid)
   issues = issues.sort((a, b) => a.iid - b.iid);
