@@ -20,6 +20,20 @@ const console = {
   debug,
   warn
 }
+export interface ImportError {
+  url: string;
+  statusCode: string;
+  data: any;
+  errors: any;
+}
+
+export interface ImportErrorDetail {
+  location: string;
+  resource: string;
+  field: string;
+  value: string;
+  code: string;
+}
 
 type IssuesListForRepoResponseData =
   Endpoints['GET /repos/{owner}/{repo}/issues']['response']['data'];
@@ -617,44 +631,68 @@ export class GithubHelper {
     if (issue.body.length > 65536) {
       throw `${issue.title} has a body longer than 65536 characters. Please shorten it.`;
     }
+    const that = this;
     // create the GitHub issue from the GitLab issue
-    let pending = await this.githubApi.request(
-      `POST /repos/${settings.github.owner}/${settings.github.repo}/import/issues`,
-      {
-        issue: issue,
-        comments: comments,
-      }
-    );
+    let result = await requestImport({that, issue, comments});
 
-    let result = null;
-    while (true) {
-      await utils.sleep(this.delayInMs);
-      result = await this.githubApi.request(
-        `GET /repos/${settings.github.owner}/${settings.github.repo}/import/issues/${pending.data.id}`
-      );
-      if (
-        result.data.status === 'imported' ||
-        result.data.status === 'failed'
-      ) {
-        break;
-      }
-    }
     if (result.data.status === 'failed') {
-      console.debug('\tFAILED: ');
-      console.debug(result);
-      const errorObject = {
+      let errorObject: ImportError = {
         url: result.data.url,
         statusCode: result.data.status,
         data: result.data,
         errors: result.data.errors,
-      }
+      };
+      
+      const couldNotAssignUserErrors = errorObject.errors?.filter((err: ImportErrorDetail) => err.value && err.code === 'invalid');
+      if (couldNotAssignUserErrors.length > 0) {
+        console.warn(`Could not assign user to issue ('${issue.title}'). Retrying without assignee...`);
+        const fallbackWithoutAssignee = { ...issue, assignee: null };
+        const result = await requestImport({that, issue: fallbackWithoutAssignee, comments});
+        if (result.data.status === 'failed') {
+          errorObject = {
+            url: result.data.url,
+            statusCode: result.data.status,
+            data: result.data,
+            errors: result.data.errors,
+          };
+
+          throw new Error(`Could not import issue: ${JSON.stringify(errorObject)}`);
+        }
+      } 
+      console.debug('\tFAILED: ');
+      console.debug(result);
+ 
       console.error('\tERRORS:');
       console.error(errorObject);
+
       return null;
     }
 
     let issue_number = result.data.issue_url.split('/').splice(-1)[0];
     return issue_number;
+
+    async function requestImport({that, issue, comments}: {that, issue: IssueImport, comments: CommentImport[]}) {
+      let pending = await that.githubApi.request(
+        `POST /repos/${settings.github.owner}/${settings.github.repo}/import/issues`,
+        {
+          issue: issue,
+          comments: comments,
+        }
+      );
+
+      let result = null;
+      while (true) {
+        await utils.sleep(that.delayInMs);
+        result = await that.githubApi.request(
+          `GET /repos/${settings.github.owner}/${settings.github.repo}/import/issues/${pending.data.id}`
+        );
+        if (result.data.status === 'imported' ||
+          result.data.status === 'failed') {
+          break;
+        }
+      }
+      return result;
+    }
   }
 
   // ----------------------------------------------------------------------------

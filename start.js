@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const inputOutputVarValid = process.env.G2H_INPUTS_OUTPUTS_DIR !== undefined && process.env.G2H_INPUTS_OUTPUTS_DIR !== '' && process.env.G2H_INPUTS_OUTPUTS_DIR !== null;
-const inputsOutputsDir = inputOutputVarValid ? process.env.G2H_INPUTS_OUTPUTS_DIR : './inputs-outputs';
+const inputsOutputsDir = inputOutputVarValid ? process.env.G2H_INPUTS_OUTPUTS_DIR : '../inputs-outputs';
 const settingsFileSourcePath = path.join(inputsOutputsDir, './settings.ts');
 
 const envFile = path.resolve('.env');

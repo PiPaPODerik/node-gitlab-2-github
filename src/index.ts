@@ -3,6 +3,8 @@ import {
   MilestoneImport,
   SimpleLabel,
   SimpleMilestone,
+  ImportError,
+  ImportErrorDetail
 } from './githubHelper';
 import { GitlabHelper, GitLabIssue, GitLabMilestone } from './gitlabHelper';
 import settings from '../settings';
@@ -25,7 +27,7 @@ import {
 } from 'loglevel';
 
 import { ATTACHMENTS_FILE_PATH } from './intput-output-files';
-import Settings from './settings';
+
 import { getOpenFileHandles, writeAttachmentsInfoToDisk } from './utils';
 
 const console = {
@@ -172,14 +174,31 @@ function createPlaceholderMilestone(expectedIdx: number): MilestoneImport {
  * @param expectedIdx Number of the GitLab issue
  * @returns Data for the issue
  */
-function createPlaceholderIssue(expectedIdx: number, forConfidentail: boolean = false): Partial<GitLabIssue> {
-  const normalText = 'This issue does not exist on GitLab and only exists to ensure that issue numbers in GitLab and GitHub are the same, to ensure proper linking between issues. If the migration was successful, this issue can be deleted.';
-  const confidentialText = 'This issue is confidential on GitLab and was excluded during Migration. Otherwise sensitive Inromation would have been leaked. It only exists to ensure that issue numbers in GitLab and GitHub are the same, to ensure proper linking between issues. If the migration was successful, this issue can be deleted.';
-  
+function createPlaceholderIssue(expectedIdx: number, issue?: GitLabIssue): Partial<GitLabIssue> {
+  const description = `This issue does not exist on GitLab and only exists to ensure that issue numbers in GitLab and GitHub are the same, to ensure proper linking between issues. If the migration was successful, this issue can be deleted. /n ${issue?.web_url ?? ''}`;
+  const title = `[PLACEHOLDER] - for issue #${expectedIdx}`;
   return {
     iid: expectedIdx,
-    title: `[PLACEHOLDER] - for issue #${expectedIdx}`,
-    description: forConfidentail ? confidentialText : normalText,
+    title,
+    description,
+    state: 'closed',
+    isPlaceholder: true,
+  };
+}
+
+/**
+ * Creates dummy data for a placeholder confidential issue
+ *
+ * @param expectedIdx Number of the GitLab issue
+ * @returns Data for the issue
+ */
+function createPlaceholderConfidentialIssue(expectedIdx: number, issue?: GitLabIssue): Partial<GitLabIssue> {
+  const description = `This issue is confidential on GitLab and was excluded during Migration. Otherwise sensitive Information would have been leaked. It only exists to ensure that issue numbers in GitLab and GitHub are the same, to ensure proper linking between issues. If the migration was successful, this issue can be deleted. /n ${issue?.web_url ?? ''}`;
+  const title = `[PLACEHOLDER] - for confidential issue #${expectedIdx}`;
+  return {
+    iid: expectedIdx,
+    title,
+    description,
     state: 'closed',
     isPlaceholder: true,
   };
@@ -484,7 +503,9 @@ async function transferIssues() {
   let issues = (await gitlabApi.Issues.all({
     projectId: settings.gitlab.projectId,
     labels: settings.filterByLabel
-  })) as GitLabIssue[];
+  }) as GitLabIssue[]).map(issue => {
+    return issue?.confidential ? createPlaceholderConfidentialIssue(issue.iid, issue) : issue;
+  }) as GitLabIssue[];
 
   // sort issues in ascending order of their issue number (by iid)
   issues = issues.sort((a, b) => a.iid - b.iid);
@@ -503,8 +524,8 @@ async function transferIssues() {
       // Create placeholder issues so that new GitHub issues will have the same
       // issue number as in GitLab. If a placeholder is used it is because there
       // was a gap in GitLab issues -- likely caused by a deleted or confidential GitLab issue.
-      if (issues[i].iid !== expectedIdx || issues[i].confidential) {
-        issues.splice(i, 0, createPlaceholderIssue(expectedIdx, issues[i].confidential) as GitLabIssue); // HACK: remove type coercion
+      if (issues[i].iid !== expectedIdx) {
+        issues.splice(i, 0, createPlaceholderIssue(expectedIdx, issues[i]) as GitLabIssue); // HACK: remove type coercion
         counters.nrOfPlaceholderIssues++;
         console.log(
           issues[i].confidential ? 
