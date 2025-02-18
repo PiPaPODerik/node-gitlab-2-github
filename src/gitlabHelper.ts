@@ -55,6 +55,20 @@ export class GitlabHelper {
     this.allBranches = null;
   }
 
+  async releasesEnabled(gitlabProjectId: number): Promise<boolean> {
+    try {
+      const releases = await this.gitlabApi.Releases.all(gitlabProjectId);
+      return releases.length > -1;
+    } catch (err) {
+      if (err.response && err.response.status === 403) {
+        console.error('Missing permissions or Releases are disabled for this project.');
+      } else {
+        console.error(err);
+        console.error('An error occurred while checking for releases:');
+      }
+      return false;
+    }
+  }
   /**
    * List all projects that the GitLab user is associated with.
    */

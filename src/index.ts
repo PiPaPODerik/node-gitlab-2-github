@@ -42,7 +42,7 @@ const CCERROR = '\x1b[31m%s\x1b[0m'; // red
 const CCWARN = '\x1b[33m%s\x1b[0m'; // yellow
 const CCINFO = '\x1b[36m%s\x1b[0m'; // cyan
 const CCSUCCESS = '\x1b[32m%s\x1b[0m'; // green
-const logIssueMigrationSkipped = () => console.warn('\x1b[1m\x1b[4m\x1b[33m%s\x1b[0m', 'Issue and MergeRequst migration NOT performed! There are existing Issues/PullRequests in the GitHub repository, which would lead to inconsisten issue numbers and falty links between issues. Recreate the repository to transfer Issues, Milestones, Labels, and Merge Requests again.');
+const logMigrationAbortedDueToExistingIssues = () => console.warn(CCWARN, 'Issue and MergeRequst migration aborted! There are existing Issues or PullRequests in the GitHub repository. Migrating would lead to inconsisten issue numbers and falty links between issues. Switch off Issue Migration or recreate the repository to transfer Issues and Merge Requests.');
 
 const counters = {
   nrOfPlaceholderIssues: 0,
@@ -238,10 +238,16 @@ async function migrate() {
 
   try {
     await prepareOutputs(ATTACHMENTS_FILE_PATH);
-    const skipIssueAndMrs = await githubHelper.hasIssuesOrMergeRequets();
-    if (skipIssueAndMrs) {
-      settings.transfer.issues = false;
-      settings.transfer.mergeRequests = false;
+    
+    if (await githubHelper.hasIssuesOrMergeRequets()) {
+      console.error('Issues or Merge Requests already exist in the GitHub repository.');
+      logMigrationAbortedDueToExistingIssues();
+      
+      process.exit(1);
+    }
+    const skipReleases = !await gitlabHelper.releasesEnabled(settings.gitlab.projectId);
+    if (skipReleases) {
+      settings.transfer.releases = false;
     }
     await githubHelper.registerRepoId();
     await gitlabHelper.registerProjectPath(settings.gitlab.projectId);
@@ -277,8 +283,8 @@ async function migrate() {
 
     await writeAttachmentsInfoToDisk(ATTACHMENTS_FILE_PATH);
 
-    if (skipIssueAndMrs) {
-      logIssueMigrationSkipped();
+    if (skipReleases) {
+      console.warn(CCWARN, 'Releases migration skipped as they are disabled for this project on GitLab.');
     }
     
     if (settings.exportUsers) {
