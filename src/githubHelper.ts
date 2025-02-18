@@ -684,6 +684,10 @@ export class GithubHelper {
      * @returns The result of the import request
      */
     async function requestImport({ that, issue, comments }: { that, issue: IssueImport, comments: CommentImport[] }): Promise<ImportResult> {
+      const getLogarithmicWait = function (tryCount: number, maxWaitTime: number, baseDelay = 50, growthFactor = 2): number {
+        const waitTime = baseDelay * Math.pow(growthFactor, tryCount - 1);
+        return Math.min(waitTime, maxWaitTime);
+      }
       let pending = await that.githubApi.request(
         `POST /repos/${settings.github.owner}/${settings.github.repo}/import/issues`,
         {
@@ -693,8 +697,10 @@ export class GithubHelper {
       );
 
       let result = null;
+      let tries = 0;
+      const maxWaitTime = 2000;
       while (true) {
-        await utils.sleep(that.delayInMs);
+        await utils.sleep(getLogarithmicWait(tries, maxWaitTime));
         result = await that.githubApi.request(
           `GET /repos/${settings.github.owner}/${settings.github.repo}/import/issues/${pending.data.id}`
         );
