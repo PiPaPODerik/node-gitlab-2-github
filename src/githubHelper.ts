@@ -21,10 +21,10 @@ const console = {
   warn
 }
 
- /**
-   * Type definition for the result object returned by the GitHub API
-   */
- interface ImportResult {
+/**
+  * Type definition for the result object returned by the GitHub API
+  */
+interface ImportResult {
   status: string;
   url: string;
   headers: {
@@ -632,7 +632,7 @@ export class GithubHelper {
     );
     return comments;
   }
- 
+
   /**
    * Calls the preview API for issue importing
    *
@@ -652,19 +652,11 @@ export class GithubHelper {
     // create the GitHub issue from the GitLab issue
     let result: ImportResult = await requestImport({ that, issue, comments });
 
-    const couldNotAssignUserErrors = result?.data?.errors?.filter((err: ImportError) => err.value && err.code === 'invalid');
-    if (couldNotAssignUserErrors?.length > 0) {
-      result = await retryWithoutAssignee(issue, comments, that);
-      if (result.data.status === 'failed') {
-        const errorObject = {
-          url: result.data.url,
-          statusCode: result.data.status,
-          data: result.data,
-          errors: result.data.errors,
-        };
-        throw new Error(`Could not import issue: ${JSON.stringify(errorObject)}`);
-      }
-    } else if (result.data.status === 'failed') {
+    if (result?.data?.errors?.length > 0) {
+      result = await handleErrors(result.data.errors, issue, comments, that);
+    }
+    
+    if (result.data.status === 'failed') {
       const errorObject = {
         url: result.data.url,
         statusCode: result.data.status,
@@ -683,19 +675,6 @@ export class GithubHelper {
 
     let issue_number = result.data.issue_url.split('/').splice(-1)[0];
     return parseInt(issue_number);
-
-    /**
-     * Retry importing the issue without assignee if the initial import fails due to invalid assignee.
-     * @param issue The issue to import
-     * @param comments The comments to import
-     * @param that The GithubHelper instance
-     * @returns The result of the import request
-     */
-    async function retryWithoutAssignee(issue: IssueImport, comments: CommentImport[], that: GithubHelper) {
-      console.warn(`Could not assign user to issue ('${issue.title}'). Retrying without assignee...`);
-      const fallbackWithoutAssignee = { ...issue, assignee: null };
-      return await requestImport({ that, issue: fallbackWithoutAssignee, comments });
-    }
 
     /**
      * Request to import an issue and its comments using the GitHub API.
@@ -725,6 +704,57 @@ export class GithubHelper {
         }
       }
       return result;
+    }
+
+    async function handleErrors(errors: ImportError[], issue: IssueImport, comments: CommentImport[], that: GithubHelper, tries: number = 0): Promise<ImportResult> {
+      const maxTries = 20;
+      if (tries > maxTries) {
+        throw new Error(`Could not import issue after ${maxTries} attempts. Last errors: ${JSON.stringify(errors)}`);
+      }
+      tries++;
+      let fallbackIssue = issue;
+      for (const err of errors) {
+        if (err.location.startsWith('/issue/assignee')) {
+          console.warn(`Could not assign user to issue ('${issue.title}'). Retrying without assignee...`);
+          fallbackIssue = { ...fallbackIssue, assignee: null };
+        }
+        if (err.location.startsWith('/issue/labels')) {
+          console.warn(`Could not assign label to issue ('${issue.title}'). Retrying without labels...`);
+          fallbackIssue = { ...fallbackIssue, labels: [] };
+        }
+        if (err.location.startsWith('/issue/milestone')) {
+          console.warn(`Could not assign milestone to issue ('${issue.title}'). Retrying without milestone...`);
+          fallbackIssue = { ...fallbackIssue, milestone: null };
+        }
+        if (err.location.startsWith('/issue/title')) {
+          console.warn(`Could not set title for issue ('${issue.title}'). Retrying without special characters title...`);
+          fallbackIssue = { ...fallbackIssue, title: issue.title.replace(/[^a-zA-Z0-9 ]/g, '') };
+        }
+        if (err.location.startsWith('/issue/body')) {
+          console.warn(`Could not set body for issue ('${issue.title}'). Retrying without special characters in body...`);
+          fallbackIssue = { ...fallbackIssue, body: issue.body.replace(/[^a-zA-Z0-9 ]/g, '') };
+        }
+        if (err.location.startsWith('/issue/created_at')) {
+          console.warn(`Could not set created_at for issue ('${issue.title}'). Retrying without created_at...`);
+          fallbackIssue = { ...fallbackIssue, created_at: undefined };
+        }
+        if (err.location.startsWith('/issue/updated_at')) {
+          console.warn(`Could not set updated_at for issue ('${issue.title}'). Retrying without updated_at...`);
+          fallbackIssue = { ...fallbackIssue, updated_at: undefined };
+        }
+      }
+
+      let result: ImportResult;
+      result = await requestImport({ that, issue: fallbackIssue, comments });
+      if (result.data.status === 'imported') {
+        return result;
+      }
+
+      await utils.sleep(that.delayInMs);
+      result = await handleErrors(result.data.errors, issue, comments, that, tries);
+      if (result.data.status === 'imported') {
+        return result;
+      }
     }
   }
 
