@@ -20,14 +20,30 @@ const console = {
   debug,
   warn
 }
-export interface ImportError {
+
+ /**
+   * Type definition for the result object returned by the GitHub API
+   */
+ interface ImportResult {
+  status: string;
   url: string;
-  statusCode: string;
-  data: any;
-  errors: any;
+  headers: {
+    [key: string]: string;
+  };
+  data: {
+    id: number;
+    status: string;
+    url: string;
+    import_issues_url: string;
+    repository_url: string;
+    issue_url: string;
+    created_at: string;
+    updated_at: string;
+    errors?: ImportError[];
+  };
 }
 
-export interface ImportErrorDetail {
+export interface ImportError {
   location: string;
   resource: string;
   field: string;
@@ -616,6 +632,7 @@ export class GithubHelper {
     );
     return comments;
   }
+ 
   /**
    * Calls the preview API for issue importing
    *
@@ -633,46 +650,61 @@ export class GithubHelper {
     }
     const that = this;
     // create the GitHub issue from the GitLab issue
-    let result = await requestImport({that, issue, comments});
+    let result: ImportResult = await requestImport({ that, issue, comments });
 
-    if (result.data.status === 'failed') {
-      let errorObject: ImportError = {
+    const couldNotAssignUserErrors = result?.data?.errors?.filter((err: ImportError) => err.value && err.code === 'invalid');
+    if (couldNotAssignUserErrors?.length > 0) {
+      result = await retryWithoutAssignee(issue, comments, that);
+      if (result.data.status === 'failed') {
+        const errorObject = {
+          url: result.data.url,
+          statusCode: result.data.status,
+          data: result.data,
+          errors: result.data.errors,
+        };
+        throw new Error(`Could not import issue: ${JSON.stringify(errorObject)}`);
+      }
+    } else if (result.data.status === 'failed') {
+      const errorObject = {
         url: result.data.url,
         statusCode: result.data.status,
         data: result.data,
         errors: result.data.errors,
       };
-      
-      const couldNotAssignUserErrors = errorObject.errors?.filter((err: ImportErrorDetail) => err.value && err.code === 'invalid');
-      if (couldNotAssignUserErrors.length > 0) {
-        console.warn(`Could not assign user to issue ('${issue.title}'). Retrying without assignee...`);
-        const fallbackWithoutAssignee = { ...issue, assignee: null };
-        const result = await requestImport({that, issue: fallbackWithoutAssignee, comments});
-        if (result.data.status === 'failed') {
-          errorObject = {
-            url: result.data.url,
-            statusCode: result.data.status,
-            data: result.data,
-            errors: result.data.errors,
-          };
 
-          throw new Error(`Could not import issue: ${JSON.stringify(errorObject)}`);
-        }
-      } else {
-        console.debug('\tFAILED: ');
-        console.debug(result);
-   
-        console.error('\tERRORS:');
-        console.error(errorObject);
-  
-        return null;
-      }
+      console.debug('\tFAILED: ');
+      console.debug(result);
+
+      console.error('\tERRORS:');
+      console.error(errorObject);
+
+      return null;
     }
 
     let issue_number = result.data.issue_url.split('/').splice(-1)[0];
-    return issue_number;
+    return parseInt(issue_number);
 
-    async function requestImport({that, issue, comments}: {that, issue: IssueImport, comments: CommentImport[]}) {
+    /**
+     * Retry importing the issue without assignee if the initial import fails due to invalid assignee.
+     * @param issue The issue to import
+     * @param comments The comments to import
+     * @param that The GithubHelper instance
+     * @returns The result of the import request
+     */
+    async function retryWithoutAssignee(issue: IssueImport, comments: CommentImport[], that: GithubHelper) {
+      console.warn(`Could not assign user to issue ('${issue.title}'). Retrying without assignee...`);
+      const fallbackWithoutAssignee = { ...issue, assignee: null };
+      return await requestImport({ that, issue: fallbackWithoutAssignee, comments });
+    }
+
+    /**
+     * Request to import an issue and its comments using the GitHub API.
+     * @param that The GithubHelper instance
+     * @param issue The issue to import
+     * @param comments The comments to import
+     * @returns The result of the import request
+     */
+    async function requestImport({ that, issue, comments }: { that, issue: IssueImport, comments: CommentImport[] }): Promise<ImportResult> {
       let pending = await that.githubApi.request(
         `POST /repos/${settings.github.owner}/${settings.github.repo}/import/issues`,
         {

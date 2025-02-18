@@ -2,9 +2,7 @@ import {
   GithubHelper,
   MilestoneImport,
   SimpleLabel,
-  SimpleMilestone,
-  ImportError,
-  ImportErrorDetail
+  SimpleMilestone
 } from './githubHelper';
 import { GitlabHelper, GitLabIssue, GitLabMilestone } from './gitlabHelper';
 import settings from '../settings';
