@@ -570,6 +570,7 @@ async function transferIssues() {
             console.error(
               '\t...ERROR: Could not create replacement issue either!'
             );
+            throw err;
           }
         }
       }
