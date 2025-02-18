@@ -70,7 +70,7 @@ export const migrateAttachments = async (
     const url = match[3];
     const fileBasename = path.basename(url);
     const attachmentUrlRel = transformToApiDownloadUrl(url, settings.gitlab.projectId);
-    
+
     if (s3 && s3.bucket) {
       const mimeType = mime.lookup(fileBasename);
       const attachmentBuffer = await gitlabHelper.getAttachment(attachmentUrlRel);
@@ -121,12 +121,10 @@ export const migrateAttachments = async (
       ] = `${prefix}[${name}](${s3url})`;
     } else {
       const targetBasePath = '.github-migration/attachments';
-      const { repoId, repoUrl, uniqueGitTag, attachmentUrl, targetPath, outputFilePath } = createattachmentInfo({targetBasePath, fileName: fileBasename, githubOwner, githubRepo});
-      
+      const { repoId, repoUrl, uniqueGitTag, attachmentUrl, targetPath, outputFilePath } = createattachmentInfo({ targetBasePath, fileName: fileBasename, sourceFileUrl: url, githubOwner, githubRepo });
       const data = await gitlabHelper.getAttachment(attachmentUrlRel, true);
-      if (data) {  
+      if (data) {
         saveToDisk(outputFilePath, data);
-  
         updateattachments({ repoId, repoUrl, uniqueGitTag, attachment: { attachmentUrl, targetPath, filePath: outputFilePath }, attachments });
       } else {
         console.error(`Failed to get attachment stream for URL: ${url}`);
@@ -152,17 +150,22 @@ export const migrateAttachments = async (
     }
   }
 
-  function createattachmentInfo({targetBasePath, fileName, githubOwner, githubRepo} : {targetBasePath: string, fileName: string, githubOwner: string, githubRepo: string}) {
+  function createattachmentInfo({ targetBasePath, fileName, sourceFileUrl, githubOwner, githubRepo }: { targetBasePath: string, fileName: string, sourceFileUrl: string, githubOwner: string, githubRepo: string }) {
     const repoUrl = `https://github.com/${githubOwner}/${githubRepo}.git`.replace(/\.git\/?$/, '.git');
     const repoId = generateHash(repoUrl);
     const uniqueGitTag = `attachments-from-gitlab-${repoId}`;
-    const targetPath = `${targetBasePath}/${repoId}/${fileName}`;
+    
+    const fileHashMatch = /\/uploads\/([^/]+)\//.exec(sourceFileUrl);
+    if (!fileHashMatch) {
+      throw new Error(`Failed to determine file hash from URL: ${sourceFileUrl}`);
+    }
 
-    const fileNameHash = crypto.randomUUID();
-    const hashedName = `${fileNameHash}-${fileName}`;
+    const fileHash = fileHashMatch[1];
+    const hashPlusName = `${fileHash}-${fileName}`;
+    const targetPath = `${targetBasePath}/${repoId}/${hashPlusName}`;
     const repoName = githubRepo;
     const repoPath = `${repoName}-${repoId}`;
-    const outputFilePath = path.join(INPUTS_OUTPUTS_DIR , 'attachments', repoPath, hashedName);
+    const outputFilePath = path.join(INPUTS_OUTPUTS_DIR, 'attachments', repoPath, hashPlusName);
     const attachmentUrl = `https://github.com/${githubOwner}/${githubRepo}/blob/${uniqueGitTag}/${targetPath}?raw=true`;
 
     return { repoId, repoUrl, uniqueGitTag, attachmentUrl, targetPath, outputFilePath };
@@ -171,18 +174,16 @@ export const migrateAttachments = async (
 };
 async function saveToDisk(outputFilePath: string, dataStream: fs.ReadStream) {
   await fs.promises.mkdir(path.dirname(outputFilePath), { recursive: true });
-  
   const writeStream = fs.createWriteStream(outputFilePath);
   dataStream.pipe(writeStream);
   dataStream.on('error', () => { writeStream.close(); console.error(`Failed to read attachment stream`) });
   dataStream.on('end', () => console.debug(`Finished reading attachment stream`));
-  
   writeStream.on('open', () => openFileHandles++);
   writeStream.on('close', () => openFileHandles--);
   writeStream.on('finish', () => {
     console.debug(`Finished writing attachment to ${outputFilePath}`);
   });
-  writeStream.on('error', () => { writeStream.close(); console.error(`Failed to write attachment to ${outputFilePath}`)});
+  writeStream.on('error', () => { writeStream.close(); console.error(`Failed to write attachment to ${outputFilePath}`) });
 }
 
 function generateHash(stringToHash: string) {
