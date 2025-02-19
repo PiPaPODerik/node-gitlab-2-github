@@ -42,7 +42,7 @@ const CCERROR = '\x1b[31m%s\x1b[0m'; // red
 const CCWARN = '\x1b[33m%s\x1b[0m'; // yellow
 const CCINFO = '\x1b[36m%s\x1b[0m'; // cyan
 const CCSUCCESS = '\x1b[32m%s\x1b[0m'; // green
-const logMigrationAbortedDueToExistingIssues = () => console.warn(CCWARN, 'Issue and MergeRequst migration aborted! There are existing Issues or PullRequests in the GitHub repository. Migrating would lead to inconsisten issue numbers and falty links between issues. Switch off Issue Migration or recreate the repository to transfer Issues and Merge Requests.');
+const logMigrationAbortedDueToExistingIssues = () => console.error('\n\nIssue and MergeRequst migration aborted! There are existing Issues or PullRequests in the GitHub repository. Migrating would lead to inconsisten issue numbers and falty links between issues. Switch off Issue Migration or recreate the repository to transfer Issues and Merge Requests.\n');
 
 const counters = {
   nrOfPlaceholderIssues: 0,
