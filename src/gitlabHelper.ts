@@ -61,7 +61,7 @@ export class GitlabHelper {
       return releases.length > -1;
     } catch (err) {
       if (err.response && err.response.status === 403) {
-        console.error('Missing permissions or Releases are disabled for this project.');
+        console.debug('Releases are likely disabled for this project on Gitlab.');
       } else {
         console.error(err);
         console.error('An error occurred while checking for releases:');
