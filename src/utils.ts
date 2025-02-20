@@ -7,8 +7,9 @@ import { GitlabHelper } from './gitlabHelper';
 
 import { warn, error, debug } from 'loglevel';
 import * as fs from 'fs';
-import { INPUTS_OUTPUTS_DIR } from './intput-output-files';
 import settings from '../settings';
+import * as attachmentsHandler from './attachmentsHandler';
+import { Readable } from 'stream';
 
 const console = {
   log: warn,
@@ -24,16 +25,6 @@ interface Attachment {
   targetPath: string;
   filePath: fs.PathLike;
 };
-
-export type AttachmentsByRepository = Record<string, { repoUrl: string, uniqueGitTag: string, attachments: Array<Attachment> }>;
-let openFileHandles = 0;
-export const getOpenFileHandles = () => openFileHandles;
-const attachments: AttachmentsByRepository = {};
-
-export async function writeAttachmentsInfoToDisk(targetPath: string) {
-  await fs.promises.writeFile(targetPath, JSON.stringify(attachments, null, 2));
-  console.debug(`Updated attachments file at ${targetPath}`);
-}
 
 function transformToApiDownloadUrl(relUrl: string, gitlabProjectId: string | number) {
   const relUrlParts = relUrl.split('/');
@@ -120,12 +111,15 @@ export const migrateAttachments = async (
         match.index as number
       ] = `${prefix}[${name}](${s3url})`;
     } else {
-      const targetBasePath = '.github-migration/attachments';
-      const { repoId, repoUrl, uniqueGitTag, attachmentUrl, targetPath, outputFilePath } = createattachmentInfo({ targetBasePath, fileName: fileBasename, sourceFileUrl: url, githubOwner, githubRepo });
+      const fileHash = /\/uploads\/([^/]+)\//.exec(url)?.[1];
+      if (!fileHash) {
+        throw new Error(`Failed to determine file hash from URL: ${url}`);
+      }
+      const { repoId, repoUrl, uniqueGitTag, attachmentUrl, targetPath, outputFilePath } = attachmentsHandler.createattachmentInfo({ fileName: fileBasename, fileHash, githubOwner, githubRepo });
       const data = await gitlabHelper.getAttachment(attachmentUrlRel, true);
       if (data) {
-        saveToDisk(outputFilePath, data);
-        updateattachments({ repoId, repoUrl, uniqueGitTag, attachment: { attachmentUrl, targetPath, filePath: outputFilePath }, attachments });
+        attachmentsHandler.saveToDisk(outputFilePath, data as Readable);
+        attachmentsHandler.updateAttachments({ repoId, repoUrl, uniqueGitTag, attachment: { attachmentUrl, targetPath, filePath: outputFilePath } });
       } else {
         console.error(`Failed to get attachment stream for URL: ${url}`);
       }
@@ -140,55 +134,5 @@ export const migrateAttachments = async (
     regexp,
     ({ }, { }, { }, { }, offset, { }) => offsetToAttachment[offset]
   );
-
-  function updateattachments({ repoId, repoUrl, uniqueGitTag, attachment, attachments }: { repoId: string, repoUrl: string, uniqueGitTag: string, attachment: Attachment, attachments: AttachmentsByRepository }) {
-    if (!attachments[repoId]) {
-      const attachmentInfo = { repoUrl, uniqueGitTag, attachments: [attachment] };
-      attachments[repoId] = attachmentInfo
-    } else {
-      attachments[repoId].attachments.push(attachment);
-    }
-  }
-
-  function createattachmentInfo({ targetBasePath, fileName, sourceFileUrl, githubOwner, githubRepo }: { targetBasePath: string, fileName: string, sourceFileUrl: string, githubOwner: string, githubRepo: string }) {
-    const repoUrl = `https://github.com/${githubOwner}/${githubRepo}.git`.replace(/\.git\/?$/, '.git');
-    const repoId = generateHash(repoUrl);
-    const uniqueGitTag = `attachments-from-gitlab-${repoId}`;
-    
-    const fileHashMatch = /\/uploads\/([^/]+)\//.exec(sourceFileUrl);
-    if (!fileHashMatch) {
-      throw new Error(`Failed to determine file hash from URL: ${sourceFileUrl}`);
-    }
-
-    const fileHash = fileHashMatch[1];
-    const hashPlusName = `${fileHash}-${fileName}`;
-    const targetPath = `${targetBasePath}/${repoId}/${hashPlusName}`;
-    const repoName = githubRepo;
-    const repoPath = `${repoName}-${repoId}`;
-    const outputFilePath = path.join(INPUTS_OUTPUTS_DIR, 'attachments', repoPath, hashPlusName);
-    const attachmentUrl = `https://github.com/${githubOwner}/${githubRepo}/blob/${uniqueGitTag}/${targetPath}?raw=true`;
-
-    return { repoId, repoUrl, uniqueGitTag, attachmentUrl, targetPath, outputFilePath };
-  }
-
 };
-async function saveToDisk(outputFilePath: string, dataStream: fs.ReadStream) {
-  await fs.promises.mkdir(path.dirname(outputFilePath), { recursive: true });
-  const writeStream = fs.createWriteStream(outputFilePath);
-  dataStream.pipe(writeStream);
-  dataStream.on('error', () => { writeStream.close(); console.error(`Failed to read attachment stream`) });
-  dataStream.on('end', () => console.debug(`Finished reading attachment stream`));
-  writeStream.on('open', () => openFileHandles++);
-  writeStream.on('close', () => openFileHandles--);
-  writeStream.on('finish', () => {
-    console.debug(`Finished writing attachment to ${outputFilePath}`);
-  });
-  writeStream.on('error', () => { writeStream.close(); console.error(`Failed to write attachment to ${outputFilePath}`) });
-}
 
-function generateHash(stringToHash: string) {
-  const hash = crypto.createHash('md5');
-  hash.update(stringToHash);
-
-  return hash.digest('hex');
-}

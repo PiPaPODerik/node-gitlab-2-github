@@ -60,8 +60,8 @@ export class GitlabHelper {
       const releases = await this.gitlabApi.Releases.all(gitlabProjectId);
       return releases.length > -1;
     } catch (err) {
-      if (err.response && err.response.status === 403) {
-        console.debug('Releases are likely disabled for this project on Gitlab.');
+      if (err.response && err.response.statusCode === 403) {
+        console.debug(`Releases are disabled for project ${gitlabProjectId} on Gitlab.`);
       } else {
         console.error(err);
         console.error('An error occurred while checking for releases:');
@@ -160,8 +160,8 @@ export class GitlabHelper {
   /**
    * Gets attachment using http get
    */
-  async getAttachment(urlRel: string, asStream = false) {
-    
+  async getAttachment(urlRel: string, asStream = false): Promise<Buffer | NodeJS.ReadableStream | null> {
+
     const url = new URL(`${this.host}/api/v4/projects/${urlRel}`);
     try {
       const data = (

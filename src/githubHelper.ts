@@ -12,6 +12,9 @@ import {
 } from './gitlabHelper';
 
 import { info, error, debug, warn } from 'loglevel';
+import { CCWARN } from './constants';
+import * as attachmentsHandler from './attachmentsHandler';
+import { Readable } from 'node:stream';
 
 const console = {
   log: warn,
@@ -64,6 +67,7 @@ const gitHubLocation = 'https://github.com';
 // Source for regex: https://stackoverflow.com/a/30281147
 const usernameRegex = new RegExp('\\B@([a-z0-9](?:-(?=[a-z0-9])|[a-z0-9]){0,38}(?<=[a-z0-9]))', 'gi')
 
+const getTextBodyTooLong = attachmentUrl => `\n\n---\n\n### 🚨 Gitlab to Github Migration Alert: Text Exceeds Character Limit 🚨\n\nThe text exceeds GitHub's character limit and has been attached separately: [View Original Merge Request](${attachmentUrl})\n\n`;
 interface CommentImport {
   created_at?: string;
   body: string;
@@ -100,6 +104,57 @@ export interface SimpleMilestone {
   title: string;
 }
 
+interface GithubApiLimits {
+  comments: {
+    maxChars: number;
+  };
+  pullRequests: {
+    maxChars: number;
+  };
+  usernames: {
+    maxLength: number;
+    pattern: RegExp;
+  };
+  organizationNames: {
+    maxLength: number;
+    pattern: RegExp;
+  };
+  teamNames: {
+    maxLength: number;
+  };
+  profileNames: {
+    maxLength: number;
+  };
+  profileBios: {
+    maxLength: number;
+  };
+  profileUrls: {
+    maxLength: number;
+  };
+  profileCompanies: {
+    maxLength: number;
+  };
+  profileLocations: {
+    maxLength: number;
+  };
+  repositoryNames: {
+    maxLength: number;
+    pattern: RegExp;
+  };
+  issueNumbers: {
+    minValue: number;
+    maxValue: number;
+  };
+  issueTitles: {
+    minLength: number;
+    maxLength: number;
+  };
+  issueDescriptions: {
+    minLength: number;
+    maxLength: number;
+  };
+}
+
 export class GithubHelper {
   githubApi: GitHubApi;
   githubUrl: string;
@@ -115,6 +170,57 @@ export class GithubHelper {
   useIssuesForAllMergeRequests: boolean;
   milestoneMap?: Map<number, SimpleMilestone>;
   users: Set<string>;
+  
+  githubApiLimits: GithubApiLimits = {
+    comments: {
+      maxChars: 65536,
+    },
+    pullRequests: {
+      maxChars: 262144,
+    },
+    usernames: {
+      maxLength: 39,
+      pattern: /^[a-z0-9](?:-(?=[a-z0-9])|[a-z0-9]){0,38}(?<=[a-z0-9])$/,
+    },
+    organizationNames: {
+      maxLength: 39,
+      pattern: /^[a-z0-9](?:-(?=[a-z0-9])|[a-z0-9]){0,38}(?<=[a-z0-9])$/,
+    },
+    teamNames: {
+      maxLength: 255,
+    },
+    profileNames: {
+      maxLength: 255,
+    },
+    profileBios: {
+      maxLength: 160,
+    },
+    profileUrls: {
+      maxLength: 255,
+    },
+    profileCompanies: {
+      maxLength: 255,
+    },
+    profileLocations: {
+      maxLength: 255,
+    },
+    repositoryNames: {
+      maxLength: 100,
+      pattern: /^[a-zA-Z0-9._-]+$/,
+    },
+    issueNumbers: {
+      minValue: 1,
+      maxValue: 1073741824,
+    },
+    issueTitles: {
+      minLength: 1,
+      maxLength: 256,
+    },
+    issueDescriptions: {
+      minLength: 1,
+      maxLength: 65536,
+    },
+  };
 
   constructor(
     githubApi: GitHubApi,
@@ -122,7 +228,7 @@ export class GithubHelper {
     gitlabHelper: GitlabHelper,
     useIssuesForAllMergeRequests: boolean,
     delayInMs: number
-  ) {
+  ){
     this.githubApi = githubApi;
     this.githubUrl = githubSettings.baseUrl
       ? githubSettings.baseUrl
@@ -655,7 +761,7 @@ export class GithubHelper {
     if (result?.data?.errors?.length > 0) {
       result = await handleErrors(result.data.errors, issue, comments, that);
     }
-    
+
     if (result.data.status === 'failed') {
       const errorObject = {
         url: result.data.url,
@@ -1096,7 +1202,8 @@ export class GithubHelper {
     let bodyConverted = await this.convertIssuesAndComments(
       mergeStr + mergeRequest.description,
       mergeRequest,
-      !this.userIsCreator(mergeRequest.author) || !settings.useIssueImportAPI
+      !this.userIsCreator(mergeRequest.author) || !settings.useIssueImportAPI,
+      this.githubApiLimits.comments.maxChars
     );
 
     if (settings.useIssueImportAPI) {
@@ -1143,6 +1250,45 @@ export class GithubHelper {
 
       return this.githubApi.issues.create(props);
     }
+  }
+
+  async ensureBodyNotTooLong({body, item, hardTruncateBodyToLenght} : { body: string, item: GitLabIssue | GitLabMergeRequest | GitLabNote | MilestoneImport, hardTruncateBodyToLenght: number}): Promise<string> {
+    const isMR: boolean = 'source_branch' in item && 'target_branch' in item;
+    const isIssue: boolean = 'iid' in item && 'title' in item && !('source_branch' in item || 'target_branch' in item);
+    
+    if (!isMR && !isIssue) {
+      return body;
+    }
+    
+    let maxLength: number = this.githubApiLimits.comments.maxChars;
+
+    if (hardTruncateBodyToLenght !== undefined && hardTruncateBodyToLenght !== null) {
+      maxLength = hardTruncateBodyToLenght;
+    } else if (isMR) {
+      maxLength = this.githubApiLimits.pullRequests.maxChars;
+    }
+    
+    if (body?.length > maxLength) {
+      let checkedItem: GitLabMergeRequest | GitLabIssue;
+      if (isMR) {
+        checkedItem = item as GitLabMergeRequest;
+        console.warn(`⚠️ MR #${checkedItem.iid} has a body too long for GitHub, truncating body and uploading attachment...`);
+      }
+      if (isIssue) {
+        checkedItem = item as GitLabIssue;
+        console.warn(CCWARN, `⚠️ Issue #${checkedItem.iid} has a body too long for GitHub, truncating body and uploading attachment...`);
+      }
+      const fileHash = attachmentsHandler.generateHash(body.slice(0, 50) + checkedItem.iid);
+      const fileName = `${fileHash}.html`;
+      const { repoId, repoUrl, uniqueGitTag, attachmentUrl, targetPath, outputFilePath } = attachmentsHandler.createattachmentInfo({ fileName, fileHash, githubOwner: this.githubOwner, githubRepo: this.githubRepo });
+      const dataStream = Readable.from(body);
+      attachmentsHandler.saveToDisk(outputFilePath, dataStream);
+      attachmentsHandler.updateAttachments({ repoId, repoUrl, uniqueGitTag, attachment: { attachmentUrl, targetPath, filePath: outputFilePath } });
+      const textBodyTooLong = getTextBodyTooLong(attachmentUrl);
+      body = `${body.slice(0, maxLength - (textBodyTooLong.length + 2))} ${textBodyTooLong}`;
+    }
+
+    return body;
   }
 
   // ----------------------------------------------------------------------------
@@ -1314,7 +1460,8 @@ export class GithubHelper {
   async convertIssuesAndComments(
     str: string,
     item: GitLabIssue | GitLabMergeRequest | GitLabNote | MilestoneImport,
-    add_line: boolean = true
+    add_line: boolean = true,
+    hardTruncateBodyToLenght?: number
   ): Promise<string> {
     // A note on implementation:
     // We don't convert project names once at the beginning because otherwise
@@ -1494,7 +1641,7 @@ export class GithubHelper {
       str += '\n\n*Migrated from GitLab: ' + item.web_url + '*';
     }
 
-    return str;
+    return await this.ensureBodyNotTooLong({body: str, item, hardTruncateBodyToLenght});
   }
 
   // ----------------------------------------------------------------------------

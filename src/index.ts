@@ -15,7 +15,7 @@ import { default as readlineSync } from 'readline-sync';
 import * as fs from 'fs';
 
 import AWS from 'aws-sdk';
-
+import * as attachmentsHandler from './attachmentsHandler';
 import {
   levels as logLevels,
   setLevel as setLogLevel,
@@ -25,8 +25,7 @@ import {
 } from 'loglevel';
 
 import { ATTACHMENTS_FILE_PATH } from './intput-output-files';
-
-import { getOpenFileHandles, writeAttachmentsInfoToDisk } from './utils';
+import { CCWARN } from './constants';
 
 const console = {
   log: warn,
@@ -38,10 +37,6 @@ const console = {
 const loglevel = logLevels[process.env?.LOGLEVEL?.toUpperCase()] || logLevels.INFO;
 setLogLevel(loglevel);
 
-const CCERROR = '\x1b[31m%s\x1b[0m'; // red
-const CCWARN = '\x1b[33m%s\x1b[0m'; // yellow
-const CCINFO = '\x1b[36m%s\x1b[0m'; // cyan
-const CCSUCCESS = '\x1b[32m%s\x1b[0m'; // green
 const logMigrationAbortedDueToExistingIssues = () => console.error('\n\nIssue and MergeRequst migration aborted! There are existing Issues or PullRequests in the GitHub repository. Migrating would lead to inconsisten issue numbers and falty links between issues. Switch off Issue Migration or recreate the repository to transfer Issues and Merge Requests.\n');
 
 const counters = {
@@ -281,7 +276,7 @@ async function migrate() {
       console.warn('Merge requests are disabled for this project. Skipping merge request migration.');
     }
 
-    await writeAttachmentsInfoToDisk(ATTACHMENTS_FILE_PATH);
+    await attachmentsHandler.writeAttachmentsInfoToDisk(ATTACHMENTS_FILE_PATH);
 
     if (skipReleases) {
       console.warn(CCWARN, 'Releases migration skipped as they are disabled for this project on GitLab.');
@@ -311,8 +306,8 @@ async function migrate() {
 }
 
 async function waitForOpenFileHandlesToClose() {
-  while (getOpenFileHandles() > 0) {
-    console.log(`Waiting for ${getOpenFileHandles()} open file handles to close...`);
+  while (attachmentsHandler.getOpenFileHandles() > 0) {
+    console.log(`Waiting for ${attachmentsHandler.getOpenFileHandles() } open file handles to close...`);
     await new Promise(resolve => setTimeout(resolve, 2000));
   }
 }
