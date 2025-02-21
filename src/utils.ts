@@ -6,7 +6,6 @@ import S3 from 'aws-sdk/clients/s3';
 import { GitlabHelper } from './gitlabHelper';
 
 import { warn, error, debug } from 'loglevel';
-import * as fs from 'fs';
 import settings from '../settings';
 import * as attachmentsHandler from './attachmentsHandler';
 import { Readable } from 'stream';
@@ -19,11 +18,6 @@ const console = {
 
 export const sleep = (milliseconds: number) => {
   return new Promise(resolve => setTimeout(resolve, milliseconds));
-};
-interface Attachment {
-  attachmentUrl: string;
-  targetPath: string;
-  filePath: fs.PathLike;
 };
 
 function transformToApiDownloadUrl(relUrl: string, gitlabProjectId: string | number) {
