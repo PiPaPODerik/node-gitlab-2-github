@@ -25,7 +25,7 @@ import {
 } from 'loglevel';
 
 import { ATTACHMENTS_FILE_PATH } from './intput-output-files';
-import { CCWARN } from './constants';
+import { CCERROR, CCWARN } from './constants';
 
 const console = {
   log: warn,
@@ -37,7 +37,7 @@ const console = {
 const loglevel = logLevels[process.env?.LOGLEVEL?.toUpperCase()] || logLevels.INFO;
 setLogLevel(loglevel);
 
-const logMigrationAbortedDueToExistingIssues = () => console.error('\n\nIssue and MergeRequst migration aborted! There are existing Issues or PullRequests in the GitHub repository. Migrating would lead to inconsisten issue numbers and falty links between issues. Switch off Issue Migration or recreate the repository to transfer Issues and Merge Requests.\n');
+const logMigrationAbortedDueToExistingIssues = () => console.error(CCERROR, '\n\nIssue and MergeRequst migration aborted! There are existing Issues or PullRequests in the GitHub repository. Migrating would lead to inconsisten issue numbers and falty links between issues. Switch off Issue Migration or recreate the repository to transfer Issues and Merge Requests.\n');
 
 const counters = {
   nrOfPlaceholderIssues: 0,
@@ -233,11 +233,11 @@ async function migrate() {
 
   try {
     await prepareOutputs(ATTACHMENTS_FILE_PATH);
-    
+
     if (await githubHelper.hasIssuesOrMergeRequets()) {
       console.error('Issues or Merge Requests already exist in the GitHub repository.');
       logMigrationAbortedDueToExistingIssues();
-      
+
       process.exit(1);
     }
     const skipReleases = !await gitlabHelper.releasesEnabled(settings.gitlab.projectId);
@@ -281,7 +281,7 @@ async function migrate() {
     if (skipReleases) {
       console.warn(CCWARN, 'Releases migration skipped as they are disabled for this project on GitLab.');
     }
-    
+
     if (settings.exportUsers) {
       const users = Array.from(githubHelper.users.values()).join("\n");
       fs.writeFileSync('users.txt', users);
@@ -306,8 +306,14 @@ async function migrate() {
 }
 
 async function waitForOpenFileHandlesToClose() {
+  const startTime = Date.now();
+  const maxWaitTime = 30000; // 30 seconds
   while (attachmentsHandler.getOpenFileHandles() > 0) {
-    console.log(`Waiting for ${attachmentsHandler.getOpenFileHandles() } open file handles to close...`);
+    if (Date.now() - startTime > maxWaitTime) {
+      console.error('Timed out while waiting for open file handles to close. Stop waiting.');
+      break;
+    }
+    console.log(`Waiting for ${attachmentsHandler.getOpenFileHandles()} open file handles to close...`);
     await new Promise(resolve => setTimeout(resolve, 2000));
   }
 }
@@ -439,7 +445,7 @@ async function transferLabels(attachmentLabel = true, useLowerCase = true) {
   }
 
   const gitlabMergeRequestLabel = {
-    name: 'gitlab merge request',
+    name: 'Merge Request from Gitlab',
     color: '#b36b00',
     description: '',
   };
@@ -527,9 +533,9 @@ async function transferIssues() {
         issues.splice(i, 0, createPlaceholderIssue(expectedIdx, issues[i]) as GitLabIssue); // HACK: remove type coercion
         counters.nrOfPlaceholderIssues++;
         console.log(
-          issues[i].confidential ? 
-          `Added placeholder issue for GitLab confidential issue #${expectedIdx}.` :
-          `Added placeholder issue for GitLab issue #${expectedIdx}.`
+          issues[i].confidential ?
+            `Added placeholder issue for GitLab confidential issue #${expectedIdx}.` :
+            `Added placeholder issue for GitLab issue #${expectedIdx}.`
         );
       }
     }

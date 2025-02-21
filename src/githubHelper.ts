@@ -170,7 +170,7 @@ export class GithubHelper {
   useIssuesForAllMergeRequests: boolean;
   milestoneMap?: Map<number, SimpleMilestone>;
   users: Set<string>;
-  
+
   githubApiLimits: GithubApiLimits = {
     comments: {
       maxChars: 65536,
@@ -228,7 +228,7 @@ export class GithubHelper {
     gitlabHelper: GitlabHelper,
     useIssuesForAllMergeRequests: boolean,
     delayInMs: number
-  ){
+  ) {
     this.githubApi = githubApi;
     this.githubUrl = githubSettings.baseUrl
       ? githubSettings.baseUrl
@@ -344,7 +344,7 @@ export class GithubHelper {
         owner: this.githubOwner,
         repo: this.githubRepo,
         state: 'all',
-        labels: 'gitlab merge request',
+        labels: 'Merge Request from Gitlab',
         per_page: perPage,
         page: page,
       });
@@ -611,7 +611,7 @@ export class GithubHelper {
 
     // if source_branch is present, it is likely a merge request
     if (item?.source_branch !== undefined) {
-      labels.push('gitlab merge request');
+      labels.push('Merge Request from Gitlab');
     }
 
     if (item.state === 'merged') {
@@ -1217,7 +1217,7 @@ export class GithubHelper {
         updated_at: mergeRequest.updated_at,
         closed:
           mergeRequest.state === 'merged' || mergeRequest.state === 'closed',
-        labels: ['gitlab merge request'],
+        labels: ['Merge Request from Gitlab'],
       };
 
       console.log('\tMigrating pull request comments...');
@@ -1246,20 +1246,20 @@ export class GithubHelper {
 
       // Add a label to indicate the issue is a merge request
       if (!mergeRequest.labels) mergeRequest.labels = [];
-      mergeRequest.labels.push('gitlab merge request');
+      mergeRequest.labels.push('Merge Request from Gitlab');
 
       return this.githubApi.issues.create(props);
     }
   }
 
-  async ensureBodyNotTooLong({body, item, hardTruncateBodyToLenght} : { body: string, item: GitLabIssue | GitLabMergeRequest | GitLabNote | MilestoneImport, hardTruncateBodyToLenght: number}): Promise<string> {
+  async ensureBodyNotTooLong({ body, item, hardTruncateBodyToLenght }: { body: string, item: GitLabIssue | GitLabMergeRequest | GitLabNote | MilestoneImport, hardTruncateBodyToLenght: number }): Promise<string> {
     const isMR: boolean = 'source_branch' in item && 'target_branch' in item;
     const isIssue: boolean = 'iid' in item && 'title' in item && !('source_branch' in item || 'target_branch' in item);
-    
+
     if (!isMR && !isIssue) {
       return body;
     }
-    
+
     let maxLength: number = this.githubApiLimits.comments.maxChars;
 
     if (hardTruncateBodyToLenght !== undefined && hardTruncateBodyToLenght !== null) {
@@ -1267,7 +1267,7 @@ export class GithubHelper {
     } else if (isMR) {
       maxLength = this.githubApiLimits.pullRequests.maxChars;
     }
-    
+
     if (body?.length > maxLength) {
       let checkedItem: GitLabMergeRequest | GitLabIssue;
       if (isMR) {
@@ -1641,7 +1641,7 @@ export class GithubHelper {
       str += '\n\n*Migrated from GitLab: ' + item.web_url + '*';
     }
 
-    return await this.ensureBodyNotTooLong({body: str, item, hardTruncateBodyToLenght});
+    return await this.ensureBodyNotTooLong({ body: str, item, hardTruncateBodyToLenght });
   }
 
   // ----------------------------------------------------------------------------

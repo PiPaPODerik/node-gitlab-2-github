@@ -242,7 +242,7 @@ Suggested values:
 
 ### mergeRequests
 
-Object consisting of `logfile` and `log`. If `log` is set to true, then the merge requests are logged in the specified file and not migrated. Conversely, if `log` is set to false, then the merge requests are migrated to GitHub and not logged. If the source or target branches linked to the merge request have been deleted, the merge request cannot be migrated to a pull request; instead, an issue with a custom "gitlab merge request" tag is created with the full comment history of the merge request.
+Object consisting of `logfile` and `log`. If `log` is set to true, then the merge requests are logged in the specified file and not migrated. Conversely, if `log` is set to false, then the merge requests are migrated to GitHub and not logged. If the source or target branches linked to the merge request have been deleted, the merge request cannot be migrated to a pull request; instead, an issue with a custom "Merge Request from Gitlab" tag is created with the full comment history of the merge request.
 
 ### usermap
 
