@@ -37,7 +37,7 @@ const console = {
 const loglevel = logLevels[process.env?.LOGLEVEL?.toUpperCase()] || logLevels.INFO;
 setLogLevel(loglevel);
 
-const logMigrationAbortedDueToExistingIssues = () => console.error(CCERROR, '\n\nIssue and MergeRequst migration aborted! There are existing Issues or PullRequests in the GitHub repository. Migrating would lead to inconsisten issue numbers and falty links between issues. Switch off Issue Migration or recreate the repository to transfer Issues and Merge Requests.\n');
+const logMigrationAbortedDueToExistingIssues = (projectUrl) => console.error(CCERROR, `\n\nIssue and MergeRequst migration for project '${projectUrl}' aborted! There are existing Issues or PullRequests in the GitHub repository. Migrating would lead to inconsisten issue numbers and falty links between issues. Switch off Issue Migration or recreate the repository to transfer Issues and Merge Requests.\n`);
 
 const counters = {
   nrOfPlaceholderIssues: 0,
@@ -236,7 +236,7 @@ async function migrate() {
 
     if (await githubHelper.hasIssuesOrMergeRequets()) {
       console.error('Issues or Merge Requests already exist in the GitHub repository.');
-      logMigrationAbortedDueToExistingIssues();
+      logMigrationAbortedDueToExistingIssues(settings.github.repo);
 
       process.exit(1);
     }
