@@ -253,7 +253,8 @@ async function migrate() {
 
     if (settings.transfer.milestones) {
       await transferMilestones(
-        settings.usePlaceholderMilestonesForMissingMilestones
+        settings.usePlaceholderMilestonesForMissingMilestones,
+        true
       );
     }
 
@@ -341,27 +342,28 @@ async function transferDescription() {
 /**
  * Transfer any milestones that exist in GitLab that do not exist in GitHub.
  */
-async function transferMilestones(usePlaceholders: boolean) {
+async function transferMilestones(usePlaceholders: boolean, includeAncestors: boolean = false) {
   inform('Transferring Milestones');
 
   // Get a list of all milestones associated with this project
   // FIXME: don't use type join but ensure everything is milestoneImport
-  let milestones: (GitLabMilestone | MilestoneImport)[] =
-    await gitlabApi.ProjectMilestones.all(settings.gitlab.projectId);
+  const milestones: (GitLabMilestone | MilestoneImport)[] =
+    await gitlabApi.ProjectMilestones.all(settings.gitlab.projectId, { include_ancestors: includeAncestors });
 
   // sort milestones in ascending order of when they were created (by id)
-  milestones = milestones.sort((a, b) => a.id - b.id);
+  const projectMilestones = milestones.filter(m => { return (m as GitLabMilestone)?.project_id === settings.gitlab.projectId }).sort((a, b) => a.id - b.id);
+  const ancestorMilestones = milestones.filter(m => { return (m as GitLabMilestone)?.project_id !== settings.gitlab.projectId }).sort((a, b) => a.id - b.id);
 
   // get a list of the current milestones in the new GitHub repo (likely to be empty)
   const githubMilestones = await githubHelper.getAllGithubMilestones();
   let lastMilestoneId = 0;
-  milestones.forEach(milestone => {
+  projectMilestones.forEach(milestone => {
     lastMilestoneId = Math.max(lastMilestoneId, milestone.iid);
   });
 
   let milestoneMap = new Map<number, SimpleMilestone>();
-  for (let i = 0; i < milestones.length; i++) {
-    let milestone = milestones[i];
+  for (let i = 0; i < projectMilestones.length; i++) {
+    let milestone = projectMilestones[i];
     let expectedIdx = i + 1; // GitLab internal Id (iid)
 
     // Create placeholder milestones so that new GitHub milestones will have
@@ -369,7 +371,7 @@ async function transferMilestones(usePlaceholders: boolean) {
     // milestones
     if (usePlaceholders && milestone.iid !== expectedIdx) {
       let placeholder = createPlaceholderMilestone(expectedIdx);
-      milestones.splice(i, 0, placeholder);
+      projectMilestones.splice(i, 0, placeholder);
       counters.nrOfPlaceholderMilestones++;
       console.log(
         `Added placeholder milestone for GitLab milestone %${expectedIdx}.`
@@ -385,12 +387,14 @@ async function transferMilestones(usePlaceholders: boolean) {
       });
     }
   }
+
   await githubHelper.registerMilestoneMap(milestoneMap);
-
+  
   // if a GitLab milestone does not exist in GitHub repo, create it.
+  const allMileStones = putOnTop(ancestorMilestones, projectMilestones);
 
-  for (let milestone of milestones) {
-    let foundMilestone = githubMilestones.find(
+  for (const milestone of allMileStones) {
+    const foundMilestone = githubMilestones.find(
       m => m.title === milestone.title
     );
     if (!foundMilestone) {
@@ -413,6 +417,19 @@ async function transferMilestones(usePlaceholders: boolean) {
       console.log('Already exists: ' + milestone.title);
     }
   }
+}
+function putOnTop(ancestorMilestones: (GitLabMilestone | MilestoneImport)[], bottom: (GitLabMilestone | MilestoneImport)[]): (GitLabMilestone | MilestoneImport)[] {
+  let nextiid = ancestorMilestones.reduce((acc, m) => {
+    if (m.iid > acc) {
+      acc = m.iid;
+    }
+    return acc;
+  }, 0) + 1;
+  const ancestorsWithNewIids = ancestorMilestones.map(m => {
+    return { ...m, iid: nextiid++ };
+  });
+
+  return [...bottom, ...ancestorsWithNewIids];
 }
 
 // ----------------------------------------------------------------------------
