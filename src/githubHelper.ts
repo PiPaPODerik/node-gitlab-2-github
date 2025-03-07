@@ -1032,7 +1032,6 @@ export class GithubHelper {
 
     if (settings.dryRun) return Promise.resolve({ number: -1, title: 'DEBUG' });
 
-    info(`Creating milestone ${milestone.title}...`);
     const created = await this.githubApi.issues.createMilestone(
       githubMilestone
     );
