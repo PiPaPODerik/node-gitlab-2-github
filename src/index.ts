@@ -254,7 +254,7 @@ async function migrate() {
     if (settings.transfer.milestones) {
       await transferMilestones(
         settings.usePlaceholderMilestonesForMissingMilestones,
-        true
+        settings.transfer.ancestorMilestones
       );
     }
 

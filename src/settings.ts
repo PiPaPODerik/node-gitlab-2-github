@@ -15,6 +15,7 @@ export default interface Settings {
   transfer: {
     description: boolean;
     milestones: boolean;
+    ancestorMilestones: boolean;
     labels: boolean;
     issues: boolean;
     mergeRequests: boolean;
