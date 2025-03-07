@@ -1,8 +1,7 @@
 {
   "compilerOptions": {
     "allowJs": false,
-    "lib": ["es2020.string"],
-    "target": "es6",
+    "lib": ["ESNext"],
     "downlevelIteration": true,
     //"strict": true,
     "moduleResolution": "node",
