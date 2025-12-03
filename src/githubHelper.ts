@@ -490,6 +490,9 @@ export class GithubHelper {
    ******************************************************************************
    */
   userIsCreator(author: GitLabUser) {
+    if (!author?.username) {
+      return false;
+    }
     this.users.add(author.username as string);
     return (
       author &&
