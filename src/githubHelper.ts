@@ -824,10 +824,11 @@ export class GithubHelper {
         throw new Error(`Could not import issue after ${maxTries} attempts. Last errors: ${JSON.stringify(errors)}`);
       }
       tries++;
+      console.warn(`\tAttempt ${tries}/${maxTries} - handling ${errors.length} error(s)...`);
       let fallbackIssue = issue;
       for (const err of errors) {
         if (err.location.startsWith('/issue/assignee')) {
-          console.warn(`Could not assign user to issue ('${issue.title}'). Retrying without assignee...`);
+          console.warn(`\tCould not assign user '${err.value}' to issue ('${issue.title}'). Retrying without assignee...`);
           fallbackIssue = { ...fallbackIssue, assignee: null };
         }
         if (err.location.startsWith('/issue/labels')) {
@@ -856,14 +857,19 @@ export class GithubHelper {
         }
       }
 
+      console.debug(`\tRetrying with modified issue: assignee=${fallbackIssue.assignee}, labels=${fallbackIssue.labels?.length || 0}, milestone=${fallbackIssue.milestone}`);
       let result: ImportResult;
       result = await requestImport({ that, issue: fallbackIssue, comments });
       if (result.data.status === 'imported') {
         return result;
       }
 
+      if (result.data.errors && result.data.errors.length > 0) {
+        console.warn(`\tRetry failed with ${result.data.errors.length} error(s). Errors: ${JSON.stringify(result.data.errors)}`);
+      }
+
       await utils.sleep(that.delayInMs);
-      result = await handleErrors(result.data.errors, issue, comments, that, tries);
+      result = await handleErrors(result.data.errors, fallbackIssue, comments, that, tries);
       if (result.data.status === 'imported') {
         return result;
       }
