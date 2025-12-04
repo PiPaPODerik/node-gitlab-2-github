@@ -821,48 +821,137 @@ export class GithubHelper {
       return result;
     }
 
-    async function handleErrors(errors: ImportError[], issue: IssueImport, comments: CommentImport[], that: GithubHelper, tries: number = 0): Promise<ImportResult> {
+    async function handleErrors(errors: ImportError[], issue: IssueImport, comments: CommentImport[], that: GithubHelper, tries: number = 0, commentRetryState?: Map<number, number>): Promise<ImportResult> {
       const maxTries = 20;
       if (tries > maxTries) {
         throw new Error(`Could not import issue after ${maxTries} attempts. Last errors: ${JSON.stringify(errors)}`);
       }
       tries++;
       console.warn(`\tAttempt ${tries}/${maxTries} - handling ${errors.length} error(s)...`);
+
+      // Track retry stage for each comment: 0=initial, 1=truncated, 2=no created_at, 3=fallback
+      if (!commentRetryState) {
+        commentRetryState = new Map<number, number>();
+      }
+
       let fallbackIssue = issue;
+      let fallbackComments = comments;
+      const failedIssues = new Set<number>();
+
       for (const err of errors) {
         if (err.location.startsWith('/issue/assignee')) {
           console.warn(`\tCould not assign user '${err.value}' to issue ('${issue.title}'). Retrying without assignee...`);
           fallbackIssue = { ...fallbackIssue, assignee: null };
         }
         if (err.location.startsWith('/issue/labels')) {
-          console.warn(`Could not assign label to issue ('${issue.title}'). Retrying without labels...`);
+          console.warn(`\tCould not assign label to issue ('${issue.title}'). Retrying without labels...`);
           fallbackIssue = { ...fallbackIssue, labels: [] };
         }
         if (err.location.startsWith('/issue/milestone')) {
-          console.warn(`Could not assign milestone to issue ('${issue.title}'). Retrying without milestone...`);
+          console.warn(`\tCould not assign milestone to issue ('${issue.title}'). Retrying without milestone...`);
           fallbackIssue = { ...fallbackIssue, milestone: null };
         }
         if (err.location.startsWith('/issue/title')) {
-          console.warn(`Could not set title for issue ('${issue.title}'). Retrying without special characters title...`);
-          fallbackIssue = { ...fallbackIssue, title: issue.title.replace(/[^a-zA-Z0-9 ]/g, '') };
+          console.warn(`\tCould not set title for issue ('${issue.title}'). Retrying without special characters title...`);
+          fallbackIssue = { ...fallbackIssue, title: issue.title.replaceAll(/[^a-zA-Z0-9 ]/g, '') };
         }
         if (err.location.startsWith('/issue/body')) {
-          console.warn(`Could not set body for issue ('${issue.title}'). Retrying without special characters in body...`);
-          fallbackIssue = { ...fallbackIssue, body: issue.body.replace(/[^a-zA-Z0-9 ]/g, '') };
-        }
+          console.warn(`\tCould not set body for issue ('${issue.title}'). Retrying without special characters in body...`);
+          fallbackIssue = { ...fallbackIssue, body: issue.body.replaceAll(/[^a-zA-Z0-9 ]/g, '') };
+        }§
         if (err.location.startsWith('/issue/created_at')) {
-          console.warn(`Could not set created_at for issue ('${issue.title}'). Retrying without created_at...`);
+          console.warn(`\tCould not set created_at for issue ('${issue.title}'). Retrying without created_at...`);
           fallbackIssue = { ...fallbackIssue, created_at: undefined };
         }
         if (err.location.startsWith('/issue/updated_at')) {
-          console.warn(`Could not set updated_at for issue ('${issue.title}'). Retrying without updated_at...`);
+          console.warn(`\tCould not set updated_at for issue ('${issue.title}'). Retrying without updated_at...`);
           fallbackIssue = { ...fallbackIssue, updated_at: undefined };
+        }
+        if (err.location.startsWith('/comments[')) {
+          const match = /\/comments\[(\d+)\]/.exec(err.location);
+          if (match) {
+            const commentIndex = Number.parseInt(match[1], 10);
+            console.warn(`\tComment #${commentIndex} has an error. Replacing with fallback comment and retrying...`);
+            failedIssues.add(commentIndex);
+          }
         }
       }
 
-      console.debug(`\tRetrying with modified issue: assignee=${fallbackIssue.assignee}, labels=${fallbackIssue.labels?.length || 0}, milestone=${fallbackIssue.milestone}`);
+      // Try to fix problematic comments with three-stage strategy
+      if (failedIssues.size > 0) {
+        fallbackComments = await Promise.all(comments.map(async (comment, index) => {
+          if (!failedIssues.has(index)) {
+            return comment;
+          }
+
+          const currentStage = commentRetryState.get(index) || 0;
+          const gitlabProjectPath = that.gitlabHelper.projectPath;
+          const titleMatch = /#(\d+)/.exec(issue.title);
+          const issueIid = titleMatch?.[1] || 'unknown';
+
+          // Stage 1: Truncate body and save original to file, keep created_at
+          if (currentStage === 0) {
+            console.warn(`\tComment #${index} - Stage 1: Truncating body and saving original to file...`);
+            commentRetryState.set(index, 1);
+
+            const fallbackBody = `**⚠️ Comment Migration Notice**\n\n` +
+              `This comment was too long for GitHub's API. The full content has been saved as an attachment.\n\n` +
+              (gitlabProjectPath ? `View original on GitLab: ${settings.gitlab.url || 'https://gitlab.com'}/${gitlabProjectPath}/-/issues/${issueIid}\n\n` : '');
+
+            // Save full comment to file
+            const fileHash = attachmentsHandler.generateHash(comment.body.slice(0, 50) + issueIid + index);
+            const fileName = `comment-${issueIid}-${index}-${fileHash}.html`;
+            const { repoId, repoUrl, uniqueGitTag, attachmentUrl, targetPath, outputFilePath } = attachmentsHandler.createattachmentInfo({
+              fileName,
+              fileHash,
+              githubOwner: that.githubOwner,
+              githubRepo: that.githubRepo
+            });
+            const dataStream = Readable.from(comment.body);
+            attachmentsHandler.saveToDisk(outputFilePath, dataStream);
+            attachmentsHandler.updateAttachments({
+              repoId,
+              repoUrl,
+              uniqueGitTag,
+              attachment: { attachmentUrl, targetPath, filePath: outputFilePath }
+            });
+
+            const attachmentLink = `[View Full Comment](${attachmentUrl})\n\n`;
+            const EXTRA_PREVIEW_BUFFER = 50;
+            const maxTruncateLength = that.githubApiLimits.comments.maxChars - fallbackBody.length - attachmentLink.length - EXTRA_PREVIEW_BUFFER;
+
+            return {
+              created_at: comment.created_at,
+              body: fallbackBody + attachmentLink + `*Preview (first ${maxTruncateLength} chars):*\n> ${comment.body.substring(0, maxTruncateLength)}${comment.body.length > maxTruncateLength ? '...' : ''}`
+            };
+          }
+
+          // Stage 2: Remove created_at, keep truncated body
+          if (currentStage === 1) {
+            console.warn(`\tComment #${index} - Stage 2: Trying without created_at field...`);
+            commentRetryState.set(index, 2);
+            return {
+              body: comment.body
+            };
+          }
+
+          // Stage 3: Fallback comment only
+          console.warn(`\tComment #${index} - Stage 3: Using fallback comment only...`);
+          commentRetryState.set(index, 3);
+          const fallbackBody = `**⚠️ Comment Migration Failed**\n\n` +
+            `This comment could not be migrated from GitLab due to an error.\n\n` +
+            `Original comment created: ${comment.created_at || 'unknown date'}\n\n` +
+            (gitlabProjectPath ? `View original comment on GitLab: ${settings.gitlab.url || 'https://gitlab.com'}/${gitlabProjectPath}/-/issues/${issueIid}\n\n` : '') +
+            `*Original comment preview (first 500 chars):*\n> ${comment.body.substring(0, 500)}${comment.body.length > 500 ? '...' : ''}`;
+
+          return {
+            body: fallbackBody
+          };
+        }));
+        console.warn(`\tModified ${failedIssues.size} problematic comment(s). Retrying with ${fallbackComments.length} comments...`);
+      } console.debug(`\tRetrying with modified issue: assignee=${fallbackIssue.assignee}, labels=${fallbackIssue.labels?.length || 0}, milestone=${fallbackIssue.milestone}, comments=${fallbackComments.length}`);
       let result: ImportResult;
-      result = await requestImport({ that, issue: fallbackIssue, comments });
+      result = await requestImport({ that, issue: fallbackIssue, comments: fallbackComments });
       if (result.data.status === 'imported') {
         return result;
       }
@@ -872,7 +961,7 @@ export class GithubHelper {
       }
 
       await utils.sleep(that.delayInMs);
-      result = await handleErrors(result.data.errors, fallbackIssue, comments, that, tries);
+      result = await handleErrors(result.data.errors, fallbackIssue, fallbackComments, that, tries, commentRetryState);
       if (result.data.status === 'imported') {
         return result;
       }
