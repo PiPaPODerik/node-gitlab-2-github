@@ -858,7 +858,7 @@ export class GithubHelper {
         if (err.location.startsWith('/issue/body')) {
           console.warn(`\tCould not set body for issue ('${issue.title}'). Retrying without special characters in body...`);
           fallbackIssue = { ...fallbackIssue, body: issue.body.replaceAll(/[^a-zA-Z0-9 ]/g, '') };
-        }§
+        }
         if (err.location.startsWith('/issue/created_at')) {
           console.warn(`\tCould not set created_at for issue ('${issue.title}'). Retrying without created_at...`);
           fallbackIssue = { ...fallbackIssue, created_at: undefined };
