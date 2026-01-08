@@ -1,5 +1,7 @@
 import { Gitlab } from '@gitbeaker/node';
 import {
+  DiscussionNote,
+  DiscussionSchema,
   IssueSchema,
   MergeRequestSchema,
   MilestoneSchema,
@@ -15,8 +17,10 @@ const console = {
   warn: warn,
   error,
   debug,
-}
+};
 
+export type GitLabDiscussion = DiscussionSchema;
+export type GitLabDiscussionNote = DiscussionNote;
 export type GitLabIssue = IssueSchema;
 export type GitLabNote = NoteSchema;
 export type GitLabUser = Omit<UserSchema, 'created_at'>;
@@ -160,9 +164,9 @@ export class GitlabHelper {
   /**
    * Gets attachment using http get
    */
-  async getAttachment(urlRel: string, asStream = false): Promise<Buffer | NodeJS.ReadableStream | null> {
+  async getAttachment(relurl: string, asStream = false): Promise<Buffer | NodeJS.ReadableStream | null> {
 
-    const url = new URL(`${this.host}/api/v4/projects/${urlRel}`);
+    const url = new URL(`${this.host}/api/v4/projects/${relurl}`);
     try {
       const data = (
         await axios.get(url.toString(), {
@@ -174,7 +178,8 @@ export class GitlabHelper {
       ).data;
       return asStream ? data : Buffer.from(data, 'binary');
     } catch (err) {
-      console.error(`Could not download attachment ${url} : ${err?.response?.statusText}`);
+      console.error(`Could not download attachment ${relurl}: ${err?.response?.statusText}`);
+      console.error('Is your session cookie still valid?');
       return null;
     }
   }
@@ -191,12 +196,52 @@ export class GitlabHelper {
     return this.allBranches as any[];
   }
 
+  async getMergeRequestApprovals(mergeRequestIid: number): Promise<string[]> {
+    try {
+      let approvals = await this.gitlabApi.MergeRequestApprovals.configuration(
+        this.gitlabProjectId,
+        {
+          mergerequestIid: mergeRequestIid,
+        },
+      );
+      if (approvals.approved_by) {
+        return approvals.approved_by.map(user => user.user.username);
+      }
+      
+      console.log(`No approvals found for GitLab merge request !${mergeRequestIid}.`)
+    } catch (err) {
+      console.error(
+        `Could not fetch approvals for GitLab merge request !${mergeRequestIid}: ${err}`
+      );
+      throw err;
+    }
+    return [];
+  }
+
   /**
    * Gets all notes for a given merge request.
    */
   async getAllMergeRequestNotes(pullRequestIid: number): Promise<GitLabNote[]> {
     try {
       return this.gitlabApi.MergeRequestNotes.all(
+        this.gitlabProjectId,
+        pullRequestIid,
+        {}
+      );
+    } catch (err) {
+      console.error(
+        `Could not fetch notes for GitLab merge request #${pullRequestIid}.`
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Gets all notes for a given merge request.
+   */
+  async getAllMergeRequestDiscussions(pullRequestIid: number): Promise<GitLabDiscussion[]> {
+    try {
+      return this.gitlabApi.MergeRequestDiscussions.all(
         this.gitlabProjectId,
         pullRequestIid,
         {}

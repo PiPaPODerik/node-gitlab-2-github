@@ -11,6 +11,7 @@ export default interface Settings {
   };
   conversion: {
     useLowerCaseLabels: boolean;
+    addIssueInformation: boolean;
   };
   transfer: {
     description: boolean;
@@ -34,7 +35,13 @@ export default interface Settings {
     logFile: string;
     log: boolean;
   };
+  commitMap?: {
+    [key: string]: string;
+  };
   s3?: S3Settings;
+  commitMap: {
+    [key: string]: string;
+  };
 }
 
 export interface GithubSettings {

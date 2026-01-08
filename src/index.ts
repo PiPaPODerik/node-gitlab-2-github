@@ -86,21 +86,21 @@ const githubApi = new MyOctokit({
   },
   auth: 'token ' + settings.github.token,
   throttle: {
-    onRateLimit: async (retryAfter, options) => {
+    onRateLimit: async (retryAfter, options, octokit, retryCount) => {
       console.log(
         `Request quota exhausted for request ${options.method} ${options.url}`
       );
       console.log(`Retrying after ${retryAfter} seconds!`);
       return true;
     },
-    onAbuseLimit: async (retryAfter, options) => {
+    onSecondaryRateLimit: async (retryAfter, options, octokit, retryCount) => {
       console.log(
-        `Abuse detected for request ${options.method} ${options.url}`
-      );
+        `SecondaryRateLimit detected for request ${options.method} ${options.url}`
+      )
       console.log(`Retrying after ${retryAfter} seconds!`);
       return true;
     },
-    minimumAbuseRetryAfter: 1000,
+    fallbackSecondaryRateRetryAfter: 600,
   },
 });
 const defaultDelayInMS = 1000;
@@ -566,7 +566,7 @@ async function transferIssues() {
   for (let issue of issues) {
     // try to find a GitHub issue that already exists for this GitLab issue
     let githubIssue = githubIssues.find(
-      i => i.title.trim() === issue.title.trim()
+      i => i.title.trim() === issue.title.trim() && i.body.includes(issue.web_url)
     );
     if (!githubIssue) {
       console.log(`\nMigrating issue #${issue.iid} ('${issue.title}')...`);
@@ -666,14 +666,14 @@ async function transferMergeRequests() {
     // Try to find a GitHub pull request that already exists for this GitLab
     // merge request
     let githubRequest = githubPullRequests.find(
-      i => i.title.trim() === mr.title.trim()
+      i => i.title.trim() === mr.title.trim() && i.body.includes(mr.web_url)
     );
     let githubIssue = githubIssues.find(
       // allow for issues titled "Original Issue Name - [merged|closed]"
       i => {
         // regex needs escaping in case merge request title contains special characters
         const regex = new RegExp(escapeRegExp(mr.title.trim()) + ' - \\[(merged|closed)\\]');
-        return regex.test(i.title.trim());
+        return regex.test(i.title.trim()) && i.body.includes(mr.web_url);
       }
     );
     if (!githubRequest && !githubIssue) {

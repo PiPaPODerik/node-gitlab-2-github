@@ -4,6 +4,8 @@ import * as utils from './utils';
 import { Octokit as GitHubApi, RestEndpointMethodTypes } from '@octokit/rest';
 import { Endpoints } from '@octokit/types';
 import {
+  GitLabDiscussion,
+  GitLabDiscussionNote,
   GitlabHelper,
   GitLabIssue,
   GitLabMergeRequest,
@@ -80,6 +82,7 @@ interface IssueImport {
   assignee?: string;
   created_at?: string;
   updated_at?: string;
+  closed_at?: string;
   milestone?: number;
   labels?: string[];
 }
@@ -170,6 +173,7 @@ export class GithubHelper {
   useIssuesForAllMergeRequests: boolean;
   milestoneMap?: Map<number, SimpleMilestone>;
   users: Set<string>;
+  members: Set<string>;
 
   githubApiLimits: GithubApiLimits = {
     comments: {
@@ -243,6 +247,19 @@ export class GithubHelper {
     this.delayInMs = delayInMs;
     this.useIssuesForAllMergeRequests = useIssuesForAllMergeRequests;
     this.users = new Set<string>();
+
+    this.members = new Set<string>();
+
+    // TODO: won't work if ownerIsOrg is false
+    githubApi.orgs.listMembers(  {
+      org: this.githubOwner,
+    }).then(members => {
+      for (let member of members.data) {
+        this.members.add(member.login);
+      }
+    }).catch(err => {
+      console.error(`Failed to fetch organization members: ${err}`);
+    });
   }
 
   /*
@@ -344,7 +361,8 @@ export class GithubHelper {
         owner: this.githubOwner,
         repo: this.githubRepo,
         state: 'all',
-        labels: 'Merge Request from Gitlab',
+        // Remove label filter to get ALL issues for proper duplicate detection
+        // labels: 'gitlab merge request',
         per_page: perPage,
         page: page,
       });
@@ -526,7 +544,9 @@ export class GithubHelper {
     let bodyConverted = await this.convertIssuesAndComments(
       issue.description ?? '',
       issue,
-      !this.userIsCreator(issue.author) || !issue.description
+      !this.userIsCreator(issue.author) || !issue.description,
+      true,
+      true,
     );
 
     let props: RestEndpointMethodTypes['issues']['create']['parameters'] = {
@@ -560,9 +580,16 @@ export class GithubHelper {
       if (username === settings.github.username) {
         assignees.push(settings.github.username);
       } else if (settings.usermap && settings.usermap[username]) {
-        assignees.push(settings.usermap[username]);
+        let gitHubUsername = settings.usermap[username];
+        if (this.members.has(gitHubUsername)) {
+          assignees.push(gitHubUsername);
+        }
+        else {
+          console.log(`Cannot assign assignee: User ${gitHubUsername} is not a member of ${this.githubOwner}`);
+        }
       }
     }
+
     return assignees;
   }
 
@@ -612,9 +639,12 @@ export class GithubHelper {
       labels.push('has attachment');
     }
 
-    // if source_branch is present, it is likely a merge request
-    if (item?.source_branch !== undefined) {
-      labels.push('Merge Request from Gitlab');
+    // Differentiate between issue and merge request
+    // Note that it needs to apply to placeholders as well
+    if ('merge_requests_count' in item) {
+      labels.push('gitlab issue');
+    } else {
+      labels.push('gitlab merge request');
     }
 
     if (item.state === 'merged') {
@@ -638,7 +668,9 @@ export class GithubHelper {
       : await this.convertIssuesAndComments(
         issue.description ?? '',
         issue,
-        !this.userIsCreator(issue.author) || !issue.description
+        !this.userIsCreator(issue.author) || !issue.description,
+        true,
+        true,
       );
 
     let props: IssueImport = {
@@ -648,6 +680,10 @@ export class GithubHelper {
       updated_at: issue.updated_at,
       closed: issue.state === 'closed',
     };
+
+    if (issue.state === 'closed' && issue.closed_at) {
+      props.closed_at = issue.closed_at;
+    }
 
     let assignees = this.convertAssignees(issue);
     props.assignee = assignees.length == 1 ? assignees[0] : undefined;
@@ -737,6 +773,84 @@ export class GithubHelper {
 
     console.log(
       `...Done creating comments (migrated ${nrOfMigratedNotes} comments, skipped ${notes.length - nrOfMigratedNotes
+      } comments)`
+    );
+    return comments;
+  }
+
+  /**
+   *
+   * @param discussions
+   * @returns Comments ready for requestImportIssue()
+   */
+  async processDiscussionsIntoComments(
+    discussions: GitLabDiscussion[]
+  ): Promise<CommentImport[]> {
+    if (!discussions || !discussions.length) {
+      console.log(`\t...no comments available, nothing to migrate.`);
+      return [];
+    }
+
+    let comments: CommentImport[] = [];
+
+    // sort notes in ascending order of when they were created (by id)
+    discussions = discussions.sort((a, b) => Number.parseInt(a.id) - Number.parseInt(b.id));
+
+    let nrOfMigratedNotes = 0;
+    let nrOfSkippedNotes = 0;
+    for (let discussion of discussions) {
+      let discussionComments = [];
+      
+      for (let note of discussion.notes) {
+        if (this.checkIfNoteCanBeSkipped(note.body)) {
+          nrOfSkippedNotes++;
+          continue;
+        }
+
+        let username = note.author.username as string;
+        this.users.add(username);
+        let userIsPoster =
+          (settings.usermap &&
+            settings.usermap[username] ===
+              settings.github.token_owner) ||
+          username === settings.github.token_owner;
+
+        // only add line ref for first note of discussion
+        const add_line_ref = discussion.notes.indexOf(note) === 0;
+
+        discussionComments.push({
+          created_at: note.created_at,
+          body: await this.convertIssuesAndComments(
+            note.body,
+            note,
+            !userIsPoster || !note.body,
+            add_line_ref,
+          ),
+        });
+
+        nrOfMigratedNotes++;
+      }
+
+      // Combine notes for discussion into one comment
+      if (discussionComments.length == 1) {
+        comments.push(discussionComments[0]);
+      }
+      else if (discussionComments.length > 1) {
+        let combinedBody = '**Discussion in GitLab:**\n\n';
+        let first_created_at = discussionComments[0].created_at;
+        
+        combinedBody += discussionComments.map(comment => comment.body).join('\n\n');
+
+        comments.push({
+          created_at: first_created_at,
+          body: combinedBody,
+        });
+      }
+    }
+
+    console.log(
+      `\t...Done creating discussion comments (migrated ${nrOfMigratedNotes} comments, skipped ${
+        nrOfSkippedNotes
       } comments)`
     );
     return comments;
@@ -1048,7 +1162,7 @@ export class GithubHelper {
    * Return false when it got skipped, otherwise true.
    */
   async processNote(
-    note: GitLabNote,
+    note: GitLabNote | GitLabDiscussionNote,
     githubIssue: Pick<GitHubIssue | GitHubPullRequest, 'number'>
   ) {
     if (this.checkIfNoteCanBeSkipped(note.body)) return false;
@@ -1257,7 +1371,10 @@ export class GithubHelper {
     if (canCreate) {
       let bodyConverted = await this.convertIssuesAndComments(
         mergeRequest.description,
-        mergeRequest
+        mergeRequest,
+        true,
+        true,
+        true,
       );
 
       // GitHub API Documentation to create a pull request: https://developer.github.com/v3/pulls/#create-a-pull-request
@@ -1300,6 +1417,8 @@ export class GithubHelper {
       mergeStr + mergeRequest.description,
       mergeRequest,
       !this.userIsCreator(mergeRequest.author) || !settings.useIssueImportAPI,
+      true,
+      true,
       this.githubApiLimits.comments.maxChars
     );
 
@@ -1325,10 +1444,10 @@ export class GithubHelper {
           '\t...this is a placeholder for a deleted GitLab merge request, no comments are created.'
         );
       } else {
-        let notes = await this.gitlabHelper.getAllMergeRequestNotes(
+        let discussions = await this.gitlabHelper.getAllMergeRequestDiscussions(
           mergeRequest.iid
         );
-        comments = await this.processNotesIntoComments(notes);
+        comments = await this.processDiscussionsIntoComments(discussions);
       }
 
       return this.requestImportIssue(props, comments);
@@ -1391,6 +1510,67 @@ export class GithubHelper {
   // ----------------------------------------------------------------------------
 
   /**
+   * Creates the information required for a new review comment.
+   * See: https://docs.github.com/en/rest/pulls/comments?apiVersion=2022-11-28#create-a-review-comment-for-a-pull-request
+   */
+  static createReviewCommentInformation(position, repoLink: string): object {
+    if (
+      !repoLink ||
+      !repoLink.startsWith(gitHubLocation) ||
+      !position ||
+      !position.head_sha ||
+      !position.line_range
+    ) {
+      throw new Error(`Position is invalid: ${JSON.stringify(position)}`);
+    }
+
+    let head_sha = position.head_sha;
+    let side = '';
+    let path = '';
+
+    if (
+      (position.new_line && position.new_path) ||
+      (position.old_line && position.old_path)
+    ) {
+      if (!position.old_line || !position.old_path) {
+        side = 'RIGHT';
+        path = position.new_path;
+      } else {
+        side = 'LEFT';
+        path = position.old_path;
+        // use the start_sha since the head_sha does not contain the line anymore
+        // head_sha = position.start_sha;
+      }
+    }
+
+    // figure out new commit
+    const cherry_picked_commit = settings.commitMap[head_sha];
+    if (cherry_picked_commit) {
+      head_sha = cherry_picked_commit;
+    }
+
+    const start = position.line_range.start;
+    const end = position.line_range.end;
+    const start_line = start.type === 'new' ? start.new_line : start.old_line;
+    const end_line = end.type === 'new' ? end.new_line : end.old_line;
+
+    let data = {
+      commit_id: head_sha,
+      path: path,
+      side: side,
+      line: end_line,
+    };
+
+    // deal with multi-line comments
+    if (start_line != end_line) {
+      data['start_line'] = start_line;
+      data['start_side'] = side;
+    }
+
+    return data;
+  }
+
+  /**
    * Create comments for the pull request
    * @param pullRequest the GitHub pull request object
    * @param mergeRequest the GitLab merge request object
@@ -1400,6 +1580,7 @@ export class GithubHelper {
     mergeRequest: GitLabMergeRequest
   ): Promise<void> {
     console.log(`\tMigrating pull request comments of (pull request #${pullRequest.number})...`);
+    const repoLink = `${this.githubUrl}/${this.githubOwner}/${this.githubRepo}`;
 
     if (!mergeRequest.iid) {
       console.debug(
@@ -1408,29 +1589,131 @@ export class GithubHelper {
       return Promise.resolve();
     }
 
-    let notes = await this.gitlabHelper.getAllMergeRequestNotes(
+    let discussions = await this.gitlabHelper.getAllMergeRequestDiscussions(
       mergeRequest.iid
     );
-
+    
     // if there are no notes, then there is nothing to do!
-    if (notes.length === 0) {
+    if (discussions.length === 0) {
       console.debug(
         `\t...no pull request comments available, nothing to migrate.`
       );
       return;
     }
-
     // Sort notes in ascending order of when they were created (by id)
-    notes = notes.sort((a, b) => a.id - b.id);
+    discussions = discussions.sort((a, b) => a.notes[0].id - b.notes[0].id);
 
     let nrOfMigratedNotes = 0;
-    for (let note of notes) {
-      const gotMigrated = await this.processNote(note, pullRequest);
-      if (gotMigrated) nrOfMigratedNotes++;
+    let nrOfSkippedNotes = 0;
+    for (let discussion of discussions) {
+      if (discussion.individual_note) {
+        const gotMigrated = await this.processNote(discussion.notes[0], pullRequest);
+        if (gotMigrated) {
+          nrOfMigratedNotes++;
+        }
+        else {
+          nrOfSkippedNotes++;
+        }
+      }
+      else {
+        // console.log('Processing discussion:');
+        let discussionBody = '**Discussion in GitLab:**\n\n';
+        let reviewComments = [];
+
+        for (let note of discussion.notes) {
+          if (this.checkIfNoteCanBeSkipped(note.body)) {
+            nrOfSkippedNotes++;
+            continue;
+          }
+
+          if (note.type === 'DiffNote') {
+            reviewComments.push({
+              body: await this.convertIssuesAndComments(note.body, note, true, false),
+              ...GithubHelper.createReviewCommentInformation(note.position, repoLink),
+            });
+          } 
+          
+          // create regular comment either way, in case the review comment cannot be created
+          const add_line_ref = discussion.notes.indexOf(note) === 0;
+          let bodyConverted = await this.convertIssuesAndComments(note.body, note, true, add_line_ref);
+          discussionBody += bodyConverted;
+          discussionBody += '\n\n';
+          nrOfMigratedNotes++;
+        }
+
+        await utils.sleep(this.delayInMs);
+
+        if (!settings.dryRun) {
+          let create_regular_comment = true;
+          if (reviewComments.length > 0) {
+            create_regular_comment = false;
+            const first_comment = reviewComments[0];
+            
+            let new_review_comment = await this.githubApi.pulls.createReviewComment({
+              owner: this.githubOwner,
+              repo: this.githubRepo,
+              pull_number: pullRequest.number,
+              ...first_comment,
+            }).catch(x => {
+              let use_fallback = false;
+              if (x.status === 422) {
+                if (x.response.data.message === 'Validation Failed') {
+                  let validation_error = x.response.data.errors[0];
+                  if (validation_error.message.endsWith(' is not part of the pull request')) {
+                    // fall back to creating a regular comment for the discussion
+                    create_regular_comment = true;
+                    use_fallback = true;
+                    console.log('fallback to regular comment');
+                  }
+                }
+              }
+
+              if (!use_fallback) {
+                console.error('could not create GitHub pull request review comment!');
+                console.error(x);
+                process.exit(1);
+              }
+            });
+
+            if (!create_regular_comment) {
+              for (let reviewComment of reviewComments.slice(1)) {
+                // await utils.sleep(this.delayInMs);
+                this.githubApi.pulls.createReplyForReviewComment({
+                  owner: this.githubOwner,
+                  repo: this.githubRepo,
+                  pull_number: pullRequest.number,
+                  comment_id: (new_review_comment as {data: {id: number}}).data.id,
+                  body: reviewComment.body,
+                }).catch(x => {
+                  console.error('could not create GitHub reply for pull request review comment!');
+                  console.error(x);
+                  process.exit(1);
+                });
+              }
+            }
+          }
+
+          if (create_regular_comment) {
+            await this.githubApi.issues
+              .createComment({
+                owner: this.githubOwner,
+                repo: this.githubRepo,
+                issue_number: pullRequest.number,
+                body: discussionBody,
+              })
+              .catch(x => {
+                console.error('could not create GitHub issue comment!');
+                console.error(x);
+                process.exit(1);
+              });
+            }
+        }
+      }
     }
 
     console.log(
-      `...Done creating pull request comments (migrated ${nrOfMigratedNotes} pull request comments, skipped ${notes.length - nrOfMigratedNotes
+      `...Done creating pull request comments (migrated ${nrOfMigratedNotes} pull request comments, skipped ${
+        nrOfSkippedNotes
       } pull request comments)`
     );
   }
@@ -1499,7 +1782,7 @@ export class GithubHelper {
       return Promise.resolve();
     }
 
-    // Use the Issues API; all pull requests are issues, and we're not modifying any pull request-sepecific fields. This
+    // Use the Issues API; all pull requests are issues, and we're not modifying any pull request-specific fields. This
     // then works for merge requests that cannot be created and are migrated as issues.
     return await this.githubApi.issues.update(props);
   }
@@ -1553,11 +1836,15 @@ export class GithubHelper {
    * @param str Body of the GitLab note
    * @param item GitLab item to which the note belongs
    * @param add_line Set to true to add the line with author and creation date
+   * @param add_line_ref Set to true to add the line ref to the comment
+   * @param add_issue_information Set to true to add assignees, reviewers, and approvers
    */
   async convertIssuesAndComments(
     str: string,
-    item: GitLabIssue | GitLabMergeRequest | GitLabNote | MilestoneImport,
+    item: GitLabIssue | GitLabMergeRequest | GitLabNote | MilestoneImport | GitLabDiscussionNote,
     add_line: boolean = true,
+    add_line_ref: boolean = true,
+    add_issue_information: boolean = false,
     hardTruncateBodyToLenght?: number
   ): Promise<string> {
     // A note on implementation:
@@ -1574,7 +1861,7 @@ export class GithubHelper {
       settings.projectmap !== null &&
       Object.keys(settings.projectmap).length > 0;
 
-    if (add_line) str = GithubHelper.addMigrationLine(str, item, repoLink);
+    if (add_line) str = GithubHelper.addMigrationLine(str, item, repoLink, add_line_ref);
     let reString = '';
 
     // Store usernames found in the text
@@ -1734,6 +2021,11 @@ export class GithubHelper {
       this.githubRepo
     );
 
+    if (add_issue_information && settings.conversion.addIssueInformation) {
+      let issue = item as GitLabIssue;
+      str = await this.addIssueInformation(issue, str)
+    }
+
     if ('web_url' in item) {
       str += '\n\n*Migrated from GitLab: ' + item.web_url + '*';
     }
@@ -1747,7 +2039,7 @@ export class GithubHelper {
    * Adds a line of text at the beginning of a comment that indicates who, when
    * and from GitLab.
    */
-  static addMigrationLine(str: string, item: any, repoLink: string): string {
+  static addMigrationLine(str: string, item: any, repoLink: string, add_line_ref: boolean = true): string {
     if (!item || !item.author || !item.author.username || !item.created_at) {
       return str;
     }
@@ -1767,11 +2059,12 @@ export class GithubHelper {
       dateformatOptions
     );
 
-    const attribution = `In GitLab by @${item.author.username} on ${formattedDate}`;
+    const attribution = `***In GitLab by @${item.author.username} on ${formattedDate}:***`;
     const lineRef =
-      item && item.position
+      item && item.position && add_line_ref
         ? GithubHelper.createLineRef(item.position, repoLink)
         : '';
+
     const summary = attribution + (lineRef ? `\n\n${lineRef}` : '');
 
     return `${summary}\n\n${str}`;
@@ -1791,7 +2084,7 @@ export class GithubHelper {
       return '';
     }
     const base_sha = position.base_sha;
-    const head_sha = position.head_sha;
+    let head_sha = position.head_sha;
     var path = '';
     var line = '';
     var slug = '';
@@ -1815,7 +2108,42 @@ export class GithubHelper {
     }
     // Mention the file and line number. If we can't get this for some reason then use the commit id instead.
     const ref = path && line ? `${path} line ${line}` : `${head_sha}`;
-    return `Commented on [${ref}](${repoLink}/compare/${base_sha}..${head_sha}${slug})\n\n`;
+    let lineRef = `Commented on [${ref}](${repoLink}/compare/${base_sha}..${head_sha}${slug})\n\n`;
+
+    if (position.line_range.start.type === 'new') {
+      const startLine = position.line_range.start.new_line;
+      const endLine = position.line_range.end.new_line;
+      const lineRange = (startLine !== endLine) ? `L${startLine}-L${endLine}` : `L${startLine}`;
+      lineRef += `${repoLink}/blob/${head_sha}/${path}#${lineRange}\n\n`;
+    }
+    else {
+      const startLine = position.line_range.start.old_line;
+      const endLine = position.line_range.end.old_line;
+      const lineRange = (startLine !== endLine) ? `L${startLine}-L${endLine}` : `L${startLine}`;
+      lineRef += `${repoLink}/blob/${head_sha}/${path}#${lineRange}\n\n`;
+    }
+
+    return lineRef;
+  }
+
+  async addIssueInformation(issue: GitLabIssue | GitLabMergeRequest, description: string): Promise<string> {
+    let bodyConverted = description;
+
+    let assignees = issue.assignees.map(a => a.username) as string[];
+    bodyConverted += utils.organizationUsersString(assignees, "Assignees");
+
+    // check whether issue is of type GitLabMergeRequest
+    if (issue.reviewers) {
+      let mergeRequest = issue as GitLabMergeRequest;
+
+      let mrReviewers = mergeRequest.reviewers.map(a => a.username) as string[];
+      bodyConverted += utils.organizationUsersString(mrReviewers, 'Reviewers');
+
+      let approvals = await this.gitlabHelper.getMergeRequestApprovals(mergeRequest.iid);
+      bodyConverted += utils.organizationUsersString(approvals, 'Approved by');
+    }
+
+    return bodyConverted;
   }
 
   /**
