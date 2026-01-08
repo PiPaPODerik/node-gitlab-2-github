@@ -1,11 +1,14 @@
 {
   "compilerOptions": {
+    "target": "ES2021",
+    "module": "commonjs",
     "allowJs": false,
-    "lib": ["ESNext"],
+    "lib": ["ES2021"],
     "downlevelIteration": true,
     //"strict": true,
     "moduleResolution": "node",
     "esModuleInterop": true,
+    "skipLibCheck": true,
     "baseUrl": "./",
     "paths": {
       "settings": ["./settings.ts"]

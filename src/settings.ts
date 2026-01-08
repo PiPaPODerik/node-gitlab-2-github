@@ -39,9 +39,6 @@ export default interface Settings {
     [key: string]: string;
   };
   s3?: S3Settings;
-  commitMap: {
-    [key: string]: string;
-  };
 }
 
 export interface GithubSettings {

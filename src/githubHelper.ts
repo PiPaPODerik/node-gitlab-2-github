@@ -487,7 +487,7 @@ export class GithubHelper {
       if (pullRequests.data.length === 0) break;
 
       // join this list of PRs with the master list
-      allPullRequests = allPullRequests.concat(pullRequests.data);
+      allPullRequests.push(...(pullRequests.data as any));
 
       // if there are strictly less PRs on this page than the maximum number per page
       // then we can be sure that this is all the PRs. No use querying again.
@@ -1468,7 +1468,7 @@ export class GithubHelper {
     }
   }
 
-  async ensureBodyNotTooLong({ body, item, hardTruncateBodyToLenght }: { body: string, item: GitLabIssue | GitLabMergeRequest | GitLabNote | MilestoneImport, hardTruncateBodyToLenght: number }): Promise<string> {
+  async ensureBodyNotTooLong({ body, item, hardTruncateBodyToLenght }: { body: string, item: GitLabIssue | GitLabMergeRequest | GitLabNote | MilestoneImport | GitLabDiscussionNote, hardTruncateBodyToLenght: number }): Promise<string> {
     const isMR: boolean = 'source_branch' in item && 'target_branch' in item;
     const isIssue: boolean = 'iid' in item && 'title' in item && !('source_branch' in item || 'target_branch' in item);
 

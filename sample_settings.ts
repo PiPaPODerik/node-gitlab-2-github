@@ -41,6 +41,7 @@ export default {
     addIssueInformation: true,
   },
   transfer: {
+    ancestorMilestones: true,
     description: true,
     milestones: true,
     labels: true,
