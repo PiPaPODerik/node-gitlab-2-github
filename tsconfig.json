@@ -1,11 +1,14 @@
 {
   "compilerOptions": {
+    "target": "esnext",
+    "module": "commonjs",
     "allowJs": false,
     "lib": ["ESNext"],
     "downlevelIteration": true,
     //"strict": true,
     "moduleResolution": "node",
     "esModuleInterop": true,
+    "skipLibCheck": true,
     "baseUrl": "./",
     "paths": {
       "settings": ["./settings.ts"]

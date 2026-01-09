@@ -22,7 +22,7 @@ export default {
     accessKeyId: '{{accessKeyId}}',
     secretAccessKey: '{{secretAccessKey}}',
     bucket: 'my-gitlab-bucket',
-    region: null,
+    region: 'us-west-1',
   },
   usermap: {
     'username.gitlab.1': 'username.github.1',
@@ -32,10 +32,16 @@ export default {
     'gitlabgroup/projectname.1': 'GitHubOrg/projectname.1',
     'gitlabgroup/projectname.2': 'GitHubOrg/projectname.2',
   },
+  commitMap: {
+    'gitlab-commit-hash-1': 'github-commit-hash-1',
+    'gitlab-commit-hash-2': 'github-commit-hash-2',
+  },
   conversion: {
     useLowerCaseLabels: true,
+    addIssueInformation: true,
   },
   transfer: {
+    ancestorMilestones: true,
     description: true,
     milestones: true,
     labels: true,
