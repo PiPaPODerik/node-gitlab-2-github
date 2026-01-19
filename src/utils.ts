@@ -12,12 +12,6 @@ import settings from '../settings';
 import * as attachmentsHandler from './attachmentsHandler';
 import { Readable } from 'stream';
 
-const console = {
-  log: warn,
-  error,
-  debug,
-}
-
 export const sleep = (milliseconds: number) => {
   return new Promise(resolve => setTimeout(resolve, milliseconds));
 };
