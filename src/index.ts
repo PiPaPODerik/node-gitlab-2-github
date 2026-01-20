@@ -76,18 +76,25 @@ const MyOctokit = GitHubApi.plugin(throttling);
 
 // Check if GitHub App credentials are provided for automatic token refresh
 const useGitHubApp = settings.github.appId && settings.github.installationId && settings.github.privateKey;
+
+// Normalize private key - handle escaped newlines from environment variables
+let normalizedPrivateKey = settings.github.privateKey;
+if (normalizedPrivateKey?.includes(String.raw`\n`)) {
+  normalizedPrivateKey = normalizedPrivateKey.replaceAll(String.raw`\n`, '\n');
+}
+
 const authSettings = useGitHubApp
-    ? {
-      authStrategy: createAppAuth,
-      auth: {
-        appId: settings.github.appId!,
-        privateKey: settings.github.privateKey!,
-        installationId: settings.github.installationId!,
-      },
-    }
-    : {
-      auth: 'token ' + settings.github.token,
-    };
+  ? {
+    authStrategy: createAppAuth,
+    auth: {
+      appId: settings.github.appId,
+      privateKey: normalizedPrivateKey,
+      installationId: settings.github.installationId,
+    },
+  }
+  : {
+    auth: 'token ' + settings.github.token,
+  };
 // Create a GitHub API object
 const githubApi = new MyOctokit({
   previews: settings.useIssueImportAPI ? ['golden-comet'] : [],
