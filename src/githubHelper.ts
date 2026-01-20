@@ -27,6 +27,30 @@ const console = {
 }
 
 /**
+ * GitHub Helper with automatic token refresh support via Octokit's authStrategy
+ * 
+ * To enable GitHub App token refresh (tokens expire after 1 hour):
+ * 1. Add the following to your settings.ts GitHub configuration:
+ *    - appId: Your GitHub App ID
+ *    - installationId: Your GitHub App Installation ID
+ *    - privateKey: Your GitHub App private key (PEM format)
+ * 
+ * 2. Octokit will automatically handle token refresh transparently
+ *    No manual token management needed!
+ * 
+ * Example settings.ts:
+ * ```typescript
+ * github: {
+ *   appId: process.env.GITHUB_APP_ID,
+ *   installationId: process.env.GITHUB_INSTALLATION_ID,
+ *   privateKey: process.env.GITHUB_PRIVATE_KEY,
+ *   token_owner: 'your-username', // still needed for migration logic
+ *   // ... other settings
+ * }
+ * ```
+ */
+
+/**
   * Type definition for the result object returned by the GitHub API
   */
 interface ImportResult {
@@ -251,7 +275,7 @@ export class GithubHelper {
     this.members = new Set<string>();
 
     if (this.githubOwnerIsOrg) {
-      githubApi.orgs.listMembers(  {
+      githubApi.orgs.listMembers({
         org: this.githubOwner,
       }).then(members => {
         for (let member of members.data) {
@@ -817,7 +841,7 @@ export class GithubHelper {
     let nrOfSkippedNotes = 0;
     for (let discussion of discussions) {
       let discussionComments = [];
-      
+
       for (let note of discussion.notes) {
         if (this.checkIfNoteCanBeSkipped(note.body)) {
           nrOfSkippedNotes++;
@@ -829,7 +853,7 @@ export class GithubHelper {
         let userIsPoster =
           (settings.usermap &&
             settings.usermap[username] ===
-              settings.github.token_owner) ||
+            settings.github.token_owner) ||
           username === settings.github.token_owner;
 
         // only add line ref for first note of discussion
@@ -855,7 +879,7 @@ export class GithubHelper {
       else if (discussionComments.length > 1) {
         let combinedBody = '**Discussion in GitLab:**\n\n';
         let first_created_at = discussionComments[0].created_at;
-        
+
         combinedBody += discussionComments.map(comment => comment.body).join('\n\n');
 
         comments.push({
@@ -866,8 +890,7 @@ export class GithubHelper {
     }
 
     console.log(
-      `\t...Done creating discussion comments (migrated ${nrOfMigratedNotes} comments, skipped ${
-        nrOfSkippedNotes
+      `\t...Done creating discussion comments (migrated ${nrOfMigratedNotes} comments, skipped ${nrOfSkippedNotes
       } comments)`
     );
     return comments;
@@ -1609,7 +1632,7 @@ export class GithubHelper {
     let discussions = await this.gitlabHelper.getAllMergeRequestDiscussions(
       mergeRequest.iid
     );
-    
+
     // if there are no notes, then there is nothing to do!
     if (discussions.length === 0) {
       console.debug(
@@ -1648,8 +1671,8 @@ export class GithubHelper {
               body: await this.convertIssuesAndComments(note.body, note, true, false),
               ...GithubHelper.createReviewCommentInformation(note.position, repoLink),
             });
-          } 
-          
+          }
+
           // create regular comment either way, in case the review comment cannot be created
           const add_line_ref = discussion.notes.indexOf(note) === 0;
           let bodyConverted = await this.convertIssuesAndComments(note.body, note, true, add_line_ref);
@@ -1665,7 +1688,7 @@ export class GithubHelper {
           if (reviewComments.length > 0) {
             create_regular_comment = false;
             const first_comment = reviewComments[0];
-            
+
             let new_review_comment = await this.githubApi.pulls.createReviewComment({
               owner: this.githubOwner,
               repo: this.githubRepo,
@@ -1699,7 +1722,7 @@ export class GithubHelper {
                   owner: this.githubOwner,
                   repo: this.githubRepo,
                   pull_number: pullRequest.number,
-                  comment_id: (new_review_comment as {data: {id: number}}).data.id,
+                  comment_id: (new_review_comment as { data: { id: number } }).data.id,
                   body: reviewComment.body,
                 }).catch(x => {
                   console.error('could not create GitHub reply for pull request review comment!');
@@ -1723,14 +1746,13 @@ export class GithubHelper {
                 console.error(x);
                 process.exit(1);
               });
-            }
+          }
         }
       }
     }
 
     console.log(
-      `...Done creating pull request comments (migrated ${nrOfMigratedNotes} pull request comments, skipped ${
-        nrOfSkippedNotes
+      `...Done creating pull request comments (migrated ${nrOfMigratedNotes} pull request comments, skipped ${nrOfSkippedNotes
       } pull request comments)`
     );
   }

@@ -10,6 +10,7 @@ import { readProjectsFromCsv } from './utils';
 
 import { Octokit as GitHubApi } from '@octokit/rest';
 import { throttling } from '@octokit/plugin-throttling';
+import { createAppAuth } from '@octokit/auth-app';
 import { Gitlab } from '@gitbeaker/node';
 
 import { default as readlineSync } from 'readline-sync';
@@ -73,6 +74,20 @@ const gitlabApi = new Gitlab({
 
 const MyOctokit = GitHubApi.plugin(throttling);
 
+// Check if GitHub App credentials are provided for automatic token refresh
+const useGitHubApp = settings.github.appId && settings.github.installationId && settings.github.privateKey;
+const authSettings = useGitHubApp
+    ? {
+      authStrategy: createAppAuth,
+      auth: {
+        appId: settings.github.appId!,
+        privateKey: settings.github.privateKey!,
+        installationId: settings.github.installationId!,
+      },
+    }
+    : {
+      auth: 'token ' + settings.github.token,
+    };
 // Create a GitHub API object
 const githubApi = new MyOctokit({
   previews: settings.useIssueImportAPI ? ['golden-comet'] : [],
@@ -85,7 +100,7 @@ const githubApi = new MyOctokit({
     'user-agent': 'node-gitlab-2-github', // GitHub is happy with a unique user agent
     accept: 'application/vnd.github.v3+json',
   },
-  auth: 'token ' + settings.github.token,
+  ...authSettings,
   throttle: {
     onRateLimit: async (retryAfter, options, octokit, retryCount) => {
       console.log(
@@ -104,7 +119,11 @@ const githubApi = new MyOctokit({
     fallbackSecondaryRateRetryAfter: 600,
   },
 });
-const defaultDelayInMS = 1000;
+
+if (useGitHubApp) {
+  warn('\x1b[90mGitHub App authentication enabled - tokens will refresh automatically\x1b[0m');
+}
+const defaultDelayInMS = 200;
 const delayInMS = parseInt(process.env.GL2GH_DELAY_MS) || defaultDelayInMS;
 console.log(`Using a delay of ${delayInMS}ms for requests to Github`);
 
@@ -126,10 +145,10 @@ if (settings.csvImport?.projectMapCsv) {
     settings.csvImport.gitlabProjectIdColumn,
     settings.csvImport.gitlabProjectPathColumn,
     settings.csvImport.githubProjectPathColumn
-  ); 
-  } else {
-    projectMap.set(settings.gitlab.projectId, ['', '']);
-  }
+  );
+} else {
+  projectMap.set(settings.gitlab.projectId, ['', '']);
+}
 
 (async () => {
   if (projectMap.size === 0 || (projectMap.size === 1 && projectMap.has(0))) {
@@ -137,14 +156,14 @@ if (settings.csvImport?.projectMapCsv) {
   } else {
     for (const projectId of projectMap.keys()) {
       const paths = projectMap.get(projectId);
-      
+
       if (!paths) {
         console.warn(`Warning: No paths found for project ID ${projectId}, skipping`);
         continue;
       }
-      
+
       const [gitlabPath, githubPath] = paths;
-      
+
       console.log(`\n\n${'='.repeat(60)}`);
       if (gitlabPath) {
         console.log(`Processing Project ID: ${projectId} ${gitlabPath} → GitHub: ${githubPath}`);
@@ -155,21 +174,21 @@ if (settings.csvImport?.projectMapCsv) {
 
       settings.gitlab.projectId = projectId;
       gitlabHelper.gitlabProjectId = projectId;
-      
+
       if (githubPath) {
         const githubParts = githubPath.split('/');
         if (githubParts.length === 2) {
           settings.github.owner = githubParts[0];
           settings.github.repo = githubParts[1];
-          
+
           githubHelper.githubOwner = githubParts[0];
           githubHelper.githubRepo = githubParts[1];
         } else {
           settings.github.repo = githubPath;
           githubHelper.githubRepo = githubPath;
-        }        
+        }
       }
-      
+
       if (settings.github.recreateRepo === true) {
         await recreate();
       }

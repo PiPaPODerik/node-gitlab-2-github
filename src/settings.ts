@@ -9,12 +9,12 @@ export default interface Settings {
   projectmap: {
     [key: string]: string;
   };
-  csvImport?:{
+  csvImport?: {
     projectMapCsv?: string;
     gitlabProjectIdColumn?: number;
     gitlabProjectPathColumn?: number;
     githubProjectPathColumn?: number;
-    }
+  }
   conversion: {
     useLowerCaseLabels: boolean;
     addIssueInformation: boolean;
@@ -58,6 +58,10 @@ export interface GithubSettings {
   timeout?: number;
   username?: string; // when is this set???
   recreateRepo?: boolean;
+  // GitHub App configuration (optional, for automatic token refresh)
+  appId?: string;
+  installationId?: string;
+  privateKey?: string;
 }
 
 export interface GitlabSettings {
