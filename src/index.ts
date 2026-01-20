@@ -77,10 +77,69 @@ const MyOctokit = GitHubApi.plugin(throttling);
 // Check if GitHub App credentials are provided for automatic token refresh
 const useGitHubApp = settings.github.appId && settings.github.installationId && settings.github.privateKey;
 
-// Normalize private key - handle escaped newlines from environment variables
+// Normalize private key - handle various encoding scenarios from GitHub Actions
 let normalizedPrivateKey = settings.github.privateKey;
-if (normalizedPrivateKey?.includes(String.raw`\n`)) {
-  normalizedPrivateKey = normalizedPrivateKey.replaceAll(String.raw`\n`, '\n');
+if (normalizedPrivateKey) {
+  normalizedPrivateKey = normalizedPrivateKey.trim();
+
+  // Debug: Check initial key format
+  console.debug(`Initial private key length: ${String(normalizedPrivateKey.length)}`);
+  console.debug(`Private key starts with: ${normalizedPrivateKey.substring(0, 50).replaceAll('\n', '\\n')}`);
+
+  // Scenario 1: GitHub Actions may store key with literal \n strings
+  if (normalizedPrivateKey.includes(String.raw`\n`)) {
+    console.debug('Scenario: Key contains escaped newlines (\\n) - converting to actual newlines');
+    normalizedPrivateKey = normalizedPrivateKey.replaceAll(String.raw`\n`, '\n');
+  }
+
+  // Scenario 2: Check if key might be base64 encoded (single line, no PEM headers)
+  if (!normalizedPrivateKey.includes('-----BEGIN') && !normalizedPrivateKey.includes('\n') && normalizedPrivateKey.length > 200) {
+    console.debug('Scenario: Key appears to be base64 encoded - attempting to decode');
+    try {
+      const decoded = Buffer.from(normalizedPrivateKey, 'base64').toString('utf8');
+      if (decoded.includes('-----BEGIN')) {
+        console.debug('Successfully decoded base64 private key');
+        normalizedPrivateKey = decoded;
+      }
+    } catch {
+      console.debug('Base64 decode failed, continuing with original value');
+    }
+  }
+
+  // Scenario 3: Key might be stored as single line with spaces instead of newlines
+  // GitHub Actions sometimes replaces newlines with spaces
+  if (!normalizedPrivateKey.includes('\n') && normalizedPrivateKey.includes(' ') && normalizedPrivateKey.includes('-----BEGIN')) {
+    console.debug('Scenario: Key is single line with spaces - converting spaces to newlines');
+    // Preserve the BEGIN/END lines and KEY word, replace other spaces with newlines
+    normalizedPrivateKey = normalizedPrivateKey
+      .replaceAll('-----BEGIN RSA PRIVATE KEY-----', '-----BEGIN RSA PRIVATE KEY-----\n')
+      .replaceAll('-----BEGIN PRIVATE KEY-----', '-----BEGIN PRIVATE KEY-----\n')
+      .replaceAll('-----END RSA PRIVATE KEY-----', '\n-----END RSA PRIVATE KEY-----')
+      .replaceAll('-----END PRIVATE KEY-----', '\n-----END PRIVATE KEY-----')
+      .replaceAll(' ', '\n')
+      // Remove double newlines that might have been created
+      .replaceAll('\n\n', '\n');
+  }
+
+  // Scenario 4: Remove any quotes that might have been added
+  if ((normalizedPrivateKey.startsWith('"') && normalizedPrivateKey.endsWith('"')) ||
+      (normalizedPrivateKey.startsWith("'") && normalizedPrivateKey.endsWith("'"))) {
+    console.debug('Scenario: Key is wrapped in quotes - removing them');
+    normalizedPrivateKey = normalizedPrivateKey.slice(1, -1);
+  }
+
+  // Final validation
+  console.debug(`Final private key length: ${String(normalizedPrivateKey.length)}`);
+  console.debug(`Final key format: ${normalizedPrivateKey.substring(0, 30)}`);
+
+  if (!normalizedPrivateKey.includes('-----BEGIN')) {
+    console.error('Private key does not appear to be in PEM format (missing -----BEGIN header).');
+    console.error('Ensure the GitHub Secret contains the complete private key including headers.');
+  }
+
+  if (!normalizedPrivateKey.includes('\n') && normalizedPrivateKey.length > 100) {
+    console.warn('Private key appears to be a single line. This may cause authentication issues.');
+  }
 }
 
 const authSettings = useGitHubApp
