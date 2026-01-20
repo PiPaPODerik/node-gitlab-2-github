@@ -85,11 +85,12 @@ if (normalizedPrivateKey?.includes(String.raw`\n`)) {
 
 const authSettings = useGitHubApp
   ? {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     authStrategy: createAppAuth,
     auth: {
       appId: settings.github.appId,
+      installationId: Number(settings.github.installationId),
       privateKey: normalizedPrivateKey,
-      installationId: settings.github.installationId,
     },
   }
   : {
