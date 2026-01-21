@@ -1584,7 +1584,7 @@ export class GithubHelper {
     }
 
     // figure out new commit
-    const cherry_picked_commit = settings.commitMap[head_sha];
+    const cherry_picked_commit = settings.commitMap?.[head_sha];
     if (cherry_picked_commit) {
       head_sha = cherry_picked_commit;
     }
@@ -1641,12 +1641,12 @@ export class GithubHelper {
       return;
     }
     // Sort notes in ascending order of when they were created (by id)
-    discussions = discussions.sort((a, b) => a.notes[0].id - b.notes[0].id);
+    discussions = discussions.sort((a, b) => (a.notes?.[0]?.id ?? 0) - (b.notes?.[0]?.id ?? 0));
 
     let nrOfMigratedNotes = 0;
     let nrOfSkippedNotes = 0;
     for (let discussion of discussions) {
-      if (discussion.individual_note) {
+      if (discussion.individual_note && discussion.notes?.[0]) {
         const gotMigrated = await this.processNote(discussion.notes[0], pullRequest);
         if (gotMigrated) {
           nrOfMigratedNotes++;
@@ -1654,6 +1654,10 @@ export class GithubHelper {
         else {
           nrOfSkippedNotes++;
         }
+      }
+      else if (discussion.individual_note) {
+        console.warn('\t...skipping discussion with no notes');
+        nrOfSkippedNotes++;
       }
       else {
         // console.log('Processing discussion:');
