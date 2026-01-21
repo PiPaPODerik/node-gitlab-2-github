@@ -191,7 +191,7 @@ if (useGitHubApp) {
   warn('\x1b[90mGitHub App authentication enabled - tokens will refresh automatically\x1b[0m');
 }
 const defaultDelayInMS = 200;
-const delayInMS = parseInt(process.env.GL2GH_DELAY_MS) || defaultDelayInMS;
+const delayInMS = Number.parseInt(process.env.GL2GH_DELAY_MS) || defaultDelayInMS;
 console.log(`Using a delay of ${delayInMS}ms for requests to Github`);
 
 const gitlabHelper = new GitlabHelper(gitlabApi, settings.gitlab);
