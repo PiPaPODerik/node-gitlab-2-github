@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import path from 'path';
 import { INPUTS_OUTPUTS_DIR } from './intput-output-files';
 import * as crypto from 'crypto';
+import * as core from '@actions/core';
 
 export {
   createattachmentInfo,
@@ -56,14 +57,14 @@ async function saveToDisk(outputFilePath: string, dataStream: NodeJS.ReadableStr
   await fs.promises.mkdir(path.dirname(outputFilePath), { recursive: true });
   const writeStream = fs.createWriteStream(outputFilePath);
   dataStream.pipe(writeStream);
-  dataStream.on('error', () => { writeStream.close(); console.error(`Failed to read attachment stream`) });
-  dataStream.on('end', () => console.debug(`Finished reading attachment stream`));
+  dataStream.on('error', () => { writeStream.close(); core.error(`Failed to read attachment stream`) });
+  dataStream.on('end', () => core.debug(`Finished reading attachment stream`));
   writeStream.on('open', () => filehandles.open++);
   writeStream.on('close', () => filehandles.open--);
   writeStream.on('finish', () => {
-    console.debug(`Finished writing attachment to ${outputFilePath}`);
+    core.debug(`Finished writing attachment to ${outputFilePath}`);
   });
-  writeStream.on('error', () => { writeStream.close(); console.error(`Failed to write attachment to ${outputFilePath}`) });
+  writeStream.on('error', () => { writeStream.close(); core.error(`Failed to write attachment to ${outputFilePath}`) });
 }
 
 function generateHash(stringToHash: string) {
@@ -75,5 +76,5 @@ function generateHash(stringToHash: string) {
 
 async function writeAttachmentsInfoToDisk(targetPath: string) {
   await fs.promises.writeFile(targetPath, JSON.stringify(attachments, null, 2));
-  console.debug(`Updated attachments file at ${targetPath}`);
+  core.debug(`Updated attachments file at ${targetPath}`);
 }
