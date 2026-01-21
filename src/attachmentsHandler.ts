@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import path from 'path';
 import { INPUTS_OUTPUTS_DIR } from './intput-output-files';
-import * as crypto from 'crypto';
+import * as crypto from 'node:crypto';
 import * as core from '@actions/core';
 
 export {
