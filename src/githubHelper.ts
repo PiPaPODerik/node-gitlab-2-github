@@ -752,6 +752,14 @@ export class GithubHelper {
 
     const issue_number = await this.requestImportIssue(props, comments);
 
+    // Throw error if issue creation failed to prevent silent skipping
+    if (issue_number === null) {
+      throw new Error(
+        `Failed to create GitHub issue for GitLab issue #${issue.iid} ("${issue.title}") after all retry attempts. ` +
+        `This prevents issue number inconsistencies.`
+      );
+    }
+
     if (assignees.length > 1 && issue_number) {
       if (assignees.length > 10) {
         console.error(
