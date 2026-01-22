@@ -307,7 +307,7 @@ function createPlaceholderMilestone(expectedIdx: number): MilestoneImport {
  * @returns Data for the issue
  */
 function createPlaceholderIssue(expectedIdx: number, issue?: GitLabIssue): Partial<GitLabIssue> {
-  const description = `This issue does not exist on GitLab and only exists to ensure that issue numbers in GitLab and GitHub are the same, to ensure proper linking between issues. If the migration was successful, this issue can be deleted. /n ${issue?.web_url ?? ''}`;
+  const description = `This issue does not exist on GitLab and only exists to ensure that issue numbers in GitLab and GitHub are the same, to ensure proper linking between issues. If the migration was successful, this issue can be deleted. ${issue?.web_url ?? ''}`;
   const title = `[PLACEHOLDER] - for issue #${expectedIdx}`;
   return {
     iid: expectedIdx,
@@ -325,7 +325,7 @@ function createPlaceholderIssue(expectedIdx: number, issue?: GitLabIssue): Parti
  * @returns Data for the issue
  */
 function createPlaceholderConfidentialIssue(expectedIdx: number, issue?: GitLabIssue): Partial<GitLabIssue> {
-  const description = `This issue is confidential on GitLab and was excluded during Migration. Otherwise sensitive Information would have been leaked. It only exists to ensure that issue numbers in GitLab and GitHub are the same, to ensure proper linking between issues. If the migration was successful, this issue can be deleted. /n ${issue?.web_url ?? ''}`;
+  const description = `This issue is confidential on GitLab and was excluded during Migration. Otherwise sensitive Information would have been leaked. It only exists to ensure that issue numbers in GitLab and GitHub are the same, to ensure proper linking between issues. If the migration was successful, this issue can be deleted. ${issue?.web_url ?? ''}`;
   const title = `[PLACEHOLDER] - for confidential issue #${expectedIdx}`;
   return {
     iid: expectedIdx,
