@@ -1711,11 +1711,15 @@ export class GithubHelper {
               if (x.status === 422) {
                 if (x.response.data.message === 'Validation Failed') {
                   let validation_error = x.response.data.errors[0];
-                  if (validation_error.message.endsWith(' is not part of the pull request')) {
+                  const error_message = validation_error.message;
+
+                  // Handle both "not part of the pull request" and "could not be resolved" errors
+                  if (error_message.endsWith(' is not part of the pull request') ||
+                    error_message === 'could not be resolved') {
                     // fall back to creating a regular comment for the discussion
                     create_regular_comment = true;
                     use_fallback = true;
-                    console.log('fallback to regular comment');
+                    console.log(`Fallback to regular comment: ${error_message} (path: ${first_comment.path}, line: ${first_comment.line}, side: ${first_comment.side}, commit: ${first_comment.commit_id?.substring(0, 8)})`);
                   }
                 }
               }
