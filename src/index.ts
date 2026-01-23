@@ -12,7 +12,7 @@ import { Octokit as GitHubApi } from '@octokit/rest';
 import { throttling } from '@octokit/plugin-throttling';
 import { createAppAuth } from '@octokit/auth-app';
 import { Gitlab } from '@gitbeaker/node';
-import { core } from '@actions/core';
+import * as core from '@actions/core';
 import { default as readlineSync } from 'readline-sync';
 import * as fs from 'fs';
 
