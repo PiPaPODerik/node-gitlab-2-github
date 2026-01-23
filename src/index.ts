@@ -12,7 +12,7 @@ import { Octokit as GitHubApi } from '@octokit/rest';
 import { throttling } from '@octokit/plugin-throttling';
 import { createAppAuth } from '@octokit/auth-app';
 import { Gitlab } from '@gitbeaker/node';
-
+import { core } from '@actions/core';
 import { default as readlineSync } from 'readline-sync';
 import * as fs from 'fs';
 
@@ -39,7 +39,7 @@ const console = {
 const loglevel = logLevels[process.env?.LOGLEVEL?.toUpperCase()] || logLevels.INFO;
 setLogLevel(loglevel);
 
-const logMigrationAbortedDueToExistingIssues = (projectUrl) => console.error(`\x1b[31m\n\nIssue and MergeRequst migration for project '${projectUrl}' aborted! There are existing Issues or PullRequests in the GitHub repository. Migrating would lead to inconsisten issue numbers and falty links between issues. Switch off Issue Migration or recreate the repository to transfer Issues and Merge Requests.\n\x1b[0m`);
+const logMigrationAbortedDueToExistingIssues = (projectUrl) => core.error(`\x1b[31m\n\nIssue and MergeRequst migration for project '${projectUrl}' aborted! There are existing Issues or PullRequests in the GitHub repository. Migrating would lead to inconsisten issue numbers and falty links between issues. Switch off Issue Migration or recreate the repository to transfer Issues and Merge Requests.\n\x1b[0m`);
 
 const counters = {
   nrOfPlaceholderIssues: 0,
