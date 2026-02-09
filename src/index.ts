@@ -7,6 +7,7 @@ import {
 import { GitlabHelper, GitLabIssue, GitLabMilestone } from './gitlabHelper';
 import settings from '../settings';
 import { readProjectsFromCsv } from './utils';
+import { buildIssuesWithPlaceholders } from './issue-placeholders';
 
 import { Octokit as GitHubApi } from '@octokit/rest';
 import { throttling } from '@octokit/plugin-throttling';
@@ -123,7 +124,7 @@ if (normalizedPrivateKey) {
 
   // Scenario 4: Remove any quotes that might have been added
   if ((normalizedPrivateKey.startsWith('"') && normalizedPrivateKey.endsWith('"')) ||
-      (normalizedPrivateKey.startsWith("'") && normalizedPrivateKey.endsWith("'"))) {
+    (normalizedPrivateKey.startsWith("'") && normalizedPrivateKey.endsWith("'"))) {
     console.debug('Scenario: Key is wrapped in quotes - removing them');
     normalizedPrivateKey = normalizedPrivateKey.slice(1, -1);
   }
@@ -677,24 +678,18 @@ async function transferIssues() {
   console.log(`Transferring ${issues.length} issues.`);
 
   if (settings.usePlaceholderIssuesForMissingIssues) {
-    for (let i = 0; i < issues.length; i++) {
-      // GitLab issue internal Id (iid)
-      let expectedIdx = i + 1;
-
-      // is there a gap in the GitLab issues or a confidentail issue?
-      // Create placeholder issues so that new GitHub issues will have the same
-      // issue number as in GitLab. If a placeholder is used it is because there
-      // was a gap in GitLab issues -- likely caused by a deleted or confidential GitLab issue.
-      if (issues[i].iid !== expectedIdx) {
-        issues.splice(i, 0, createPlaceholderIssue(expectedIdx, issues[i]) as GitLabIssue); // HACK: remove type coercion
+    issues = buildIssuesWithPlaceholders(
+      issues,
+      (expectedIdx, issue) => createPlaceholderIssue(expectedIdx, issue) as GitLabIssue, // HACK: remove type coercion
+      (expectedIdx, issue) => {
         counters.nrOfPlaceholderIssues++;
         console.log(
-          issues[i].confidential ?
+          issue.confidential ?
             `Added placeholder issue for GitLab confidential issue #${expectedIdx}.` :
             `Added placeholder issue for GitLab issue #${expectedIdx}.`
         );
       }
-    }
+    );
   }
 
   //
