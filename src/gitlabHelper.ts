@@ -11,6 +11,7 @@ import {
 import { GitlabSettings } from './settings';
 import axios from 'axios';
 import { warn, error, debug } from 'loglevel';
+import { retryWithBackoff } from './utils';
 
 const console = {
   log: warn,
@@ -145,7 +146,7 @@ export class GitlabHelper {
   async areMergeRequestsEnabled(gitlabProjectId: number): Promise<boolean> {
     try {
       const project = await this.gitlabApi.Projects.show(gitlabProjectId);
-      
+
       if ('merge_requests_enabled' in project) {
         return project.merge_requests_enabled;
       } else {
@@ -168,14 +169,17 @@ export class GitlabHelper {
 
     const url = new URL(`${this.host}/api/v4/projects/${relurl}`);
     try {
-      const data = (
-        await axios.get(url.toString(), {
-          responseType: asStream ? 'stream' : 'arraybuffer',
-          headers: {
-            'PRIVATE-TOKEN': this.gitlabToken,
-          },
-        })
-      ).data;
+      const data = await retryWithBackoff(
+        async () => {
+          const response = await axios.get(url.toString(), {
+            responseType: asStream ? 'stream' : 'arraybuffer',
+            headers: {
+              'PRIVATE-TOKEN': this.gitlabToken,
+            },
+          });
+          return response.data;
+        }
+      );
       return asStream ? data : Buffer.from(data, 'binary');
     } catch (err) {
       console.error(`Could not download attachment ${relurl}: ${err?.response?.statusText}`);
@@ -207,7 +211,7 @@ export class GitlabHelper {
       if (approvals.approved_by) {
         return approvals.approved_by.map(user => user.user.username);
       }
-      
+
       console.log(`No approvals found for GitLab merge request !${mergeRequestIid}.`)
     } catch (err) {
       console.error(

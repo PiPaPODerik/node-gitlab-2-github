@@ -16,6 +16,107 @@ export const sleep = (milliseconds: number) => {
   return new Promise(resolve => setTimeout(resolve, milliseconds));
 };
 
+/**
+ * Configuration for retry behavior
+ */
+export interface RetryConfig {
+  maxRetries?: number;
+  baseDelayMs?: number;
+  maxDelayMs?: number;
+  retryableStatusCodes?: number[];
+  shouldRetry?: (error: any) => boolean;
+}
+
+/**
+ * Default retry configuration
+ */
+const DEFAULT_RETRY_CONFIG: Required<RetryConfig> = {
+  maxRetries: 3,
+  baseDelayMs: 1000,
+  maxDelayMs: 32000,
+  retryableStatusCodes: [429, 500, 502, 503, 504],
+  shouldRetry: (error: any) => {
+    const status = error?.status || error?.response?.status || error?.statusCode;
+    return DEFAULT_RETRY_CONFIG.retryableStatusCodes.includes(status);
+  }
+};
+
+/**
+ * Calculate delay with exponential backoff and jitter
+ * @param attempt - The current attempt number (0-indexed)
+ * @param baseDelayMs - Base delay in milliseconds
+ * @param maxDelayMs - Maximum delay in milliseconds
+ * @returns Delay in milliseconds
+ */
+function calculateDelay(attempt: number, baseDelayMs: number, maxDelayMs: number): number {
+  // Exponential backoff: baseDelay * 2^attempt
+  const exponentialDelay = baseDelayMs * Math.pow(2, attempt);
+
+  // Cap at maxDelay
+  const cappedDelay = Math.min(exponentialDelay, maxDelayMs);
+
+  // Add jitter: random value between 0 and cappedDelay
+  const jitter = Math.random() * cappedDelay;
+
+  return jitter;
+}
+
+/**
+ * Retry a function with exponential backoff and jitter
+ * Handles HTTP status codes 429, 500, 502, 503, 504 by default
+ * 
+ * @param fn - The async function to retry
+ * @param config - Retry configuration
+ * @returns The result of the function call
+ * 
+ * @example
+ * const result = await retryWithBackoff(
+ *   async () => await githubApi.issues.create(params),
+ *   { maxRetries: 3, baseDelayMs: 1000 }
+ * );
+ */
+export async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  config: RetryConfig = {}
+): Promise<T> {
+  const mergedConfig = { ...DEFAULT_RETRY_CONFIG, ...config };
+  const { maxRetries, baseDelayMs, maxDelayMs, shouldRetry } = mergedConfig;
+
+  let lastError: any;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+
+      // Check if we should retry this error
+      if (!shouldRetry(error)) {
+        throw error;
+      }
+
+      // If this was the last attempt, throw the error
+      if (attempt === maxRetries) {
+        throw error;
+      }
+
+      // Calculate delay and wait
+      const delay = calculateDelay(attempt, baseDelayMs, maxDelayMs);
+      const status = error?.status || error?.response?.status || error?.statusCode;
+
+      console.warn(
+        `Request failed with status ${status}. Retrying in ${Math.round(delay)}ms... ` +
+        `(attempt ${attempt + 1}/${maxRetries})`
+      );
+
+      await sleep(delay);
+    }
+  }
+
+  // This should never be reached, but TypeScript needs it
+  throw lastError;
+}
+
 export const readProjectsFromCsv = (
   filePath: string,
   idColumn: number = 0,
@@ -34,14 +135,14 @@ export const readProjectsFromCsv = (
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
-      
+
       if (!line || line.startsWith('#')) {
         continue;
       }
 
       const values = line.split(',').map(v => v.trim());
       const maxColumn = Math.max(idColumn, gitlabPathColumn, githubPathColumn);
-      
+
       if (maxColumn >= values.length) {
         console.warn(`Warning: Line ${i + 1} has only ${values.length} column(s), skipping (need column ${maxColumn})`);
         if (!headerSkipped) {
@@ -79,14 +180,14 @@ export const readProjectsFromCsv = (
     }
 
     if (projectMap.size === 0) {
-          throw new Error(`No valid project mappings found in CSV file: ${filePath}`);
-        }
-    
-        console.log(`✓ Loaded ${projectMap.size} project mappings from CSV`);
-        return projectMap;
-      } catch (err) {
-        console.error(`Error reading project mapping CSV file: ${err.message}`);
-        throw err;
+      throw new Error(`No valid project mappings found in CSV file: ${filePath}`);
+    }
+
+    console.log(`✓ Loaded ${projectMap.size} project mappings from CSV`);
+    return projectMap;
+  } catch (err) {
+    console.error(`Error reading project mapping CSV file: ${err.message}`);
+    throw err;
   }
 };
 

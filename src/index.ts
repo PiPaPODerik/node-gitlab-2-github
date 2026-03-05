@@ -12,6 +12,7 @@ import { buildIssuesWithPlaceholders } from './issue-placeholders';
 import { Octokit as GitHubApi } from '@octokit/rest';
 import { throttling } from '@octokit/plugin-throttling';
 import { createAppAuth } from '@octokit/auth-app';
+import { retryPlugin } from './octokit-retry-plugin';
 import { Gitlab } from '@gitbeaker/node';
 import * as core from '@actions/core';
 import { default as readlineSync } from 'readline-sync';
@@ -73,7 +74,7 @@ const gitlabApi = new Gitlab({
   token: settings.gitlab.token,
 });
 
-const MyOctokit = GitHubApi.plugin(throttling);
+const MyOctokit = GitHubApi.plugin(throttling, retryPlugin);
 
 // Check if GitHub App credentials are provided for automatic token refresh
 const useGitHubApp = settings.github.appId && settings.github.installationId && settings.github.privateKey;
